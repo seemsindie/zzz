@@ -1,11 +1,19 @@
 const std = @import("std");
-const c = std.c;
+const native_os = @import("builtin").os.tag;
 const Context = @import("context.zig").Context;
 
 fn getMonotonicNs() i128 {
-    var ts: c.timespec = undefined;
-    _ = c.clock_gettime(c.CLOCK.MONOTONIC, &ts);
-    return @as(i128, ts.sec) * std.time.ns_per_s + ts.nsec;
+    if (native_os == .linux) {
+        const linux = std.os.linux;
+        var ts: linux.timespec = undefined;
+        _ = linux.clock_gettime(linux.CLOCK.MONOTONIC, &ts);
+        return @as(i128, ts.sec) * std.time.ns_per_s + ts.nsec;
+    } else {
+        const c = std.c;
+        var ts: c.timespec = undefined;
+        _ = c.clock_gettime(c.CLOCK.MONOTONIC, &ts);
+        return @as(i128, ts.sec) * std.time.ns_per_s + ts.nsec;
+    }
 }
 
 /// Logger middleware — logs method, path, status code, and response time.
