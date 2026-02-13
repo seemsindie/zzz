@@ -63,6 +63,10 @@ zigweb_workspace/
         layout.zig         # Layout system
         partial.zig        # Partial/component system
         html_escape.zig    # XSS-safe escaping
+      htmx/
+        htmx.zig           # htmx helpers (request detection, response headers)
+        middleware.zig      # htmx middleware (auto-detect, strip layout, Vary header)
+        assets.zig         # Embedded htmx.min.js serving
       swagger/
         generator.zig      # OpenAPI spec generation from routes
         schema.zig         # JSON Schema from Zig types (comptime)
@@ -171,14 +175,17 @@ zigweb_workspace/
         post.zig
       templates/
         layout/
-          app.html.zzz
+          app.html.zzz      # Base layout (includes htmx.js script)
         page/
           index.html.zzz
           about.html.zzz
         user/
-          index.html.zzz
+          index.html.zzz    # Full page: user list with htmx search
           show.html.zzz
-          form.html.zzz
+          form.html.zzz     # Form with htmx submit (no full page reload)
+          _row.html.zzz     # Partial: single user table row (htmx fragment)
+          _table.html.zzz   # Partial: user table body (htmx fragment)
+          _search.html.zzz  # Partial: search results (htmx fragment)
       static/
         css/
         js/
@@ -292,9 +299,20 @@ zigweb_workspace/
 
 ---
 
-### Phase 3: Template Engine
+### Phase 3: Template Engine & View Layer
 
-**Goal**: Compile templates to Zig functions at build time.
+**Goal**: Compile templates to Zig functions at build time. Support three rendering strategies:
+server-rendered with htmx (primary), traditional templates, and API+SPA with JS SSR.
+
+#### 3.0 Rendering Strategy Overview
+
+Zzz supports three rendering modes — pick what fits your app:
+
+| Strategy | Use Case | How It Works |
+|----------|----------|-------------|
+| **htmx + Templates** (default) | Interactive server-rendered apps | Full pages on first load, HTML fragments on htmx requests. Like Phoenix LiveView but simpler. |
+| **Templates only** | Classic MVC sites, blogs, admin panels | Server renders full HTML every request. No JS required. |
+| **API + SPA** | React/Vue/Svelte frontends | Zzz serves JSON API + optional SSR via Node/Deno/Bun subprocess. |
 
 #### 3.1 Template Syntax (Handlebars-inspired with Zig power)
 ```html
@@ -313,8 +331,8 @@ zigweb_workspace/
 
 {{> partials/header}}
 
-{{#component "button" type="primary"}}
-  Click me
+{{#component "card" title="Profile"}}
+  <p>{{user.bio}}</p>
 {{/component}}
 
 {{{raw_html}}}  {{! triple-brace = unescaped }}
@@ -328,14 +346,104 @@ zigweb_workspace/
 - Layout wrapping (yield block)
 - Zero runtime template parsing overhead
 
-#### 3.3 React/Vue SSR Bridge (Later Phase)
-- Shell out to Node/Deno/Bun for initial render
-- Pass props as JSON
-- Return rendered HTML string
-- Hydration script injection
-- Could also embed QuickJS for in-process JS execution
+#### 3.3 htmx Integration (Built-in, First-Class)
 
-**Deliverable**: `{{name}}` templates compile to fast Zig render functions.
+htmx is the primary strategy for interactive UIs. The framework provides built-in
+support so you can build dynamic apps with zero custom JavaScript.
+
+**Request Detection & Context:**
+```zig
+fn listUsers(ctx: *zzz.Context) !void {
+    const users = getUsers();
+
+    if (ctx.isHtmx()) {
+        // htmx request — render just the table rows fragment
+        ctx.renderPartial("users/_table_rows", .{ .users = users });
+    } else {
+        // Full page load — render with layout
+        ctx.render("users/index", .{ .users = users });
+    }
+}
+```
+
+**Response Header Helpers:**
+```zig
+// Trigger client-side events
+ctx.htmxTrigger("userCreated");
+
+// Redirect (uses HX-Redirect instead of 302 for htmx requests)
+ctx.htmxRedirect("/users");
+
+// Push URL to browser history
+ctx.htmxPushUrl("/users/42");
+
+// Change swap behavior
+ctx.htmxReswap("outerHTML");
+ctx.htmxRetarget("#user-list");
+```
+
+**Template with htmx attributes:**
+```html
+<div id="user-list">
+  <input type="search" name="q"
+         hx-get="/users/search"
+         hx-trigger="keyup changed delay:300ms"
+         hx-target="#results">
+
+  <div id="results">
+    {{#each users as |user|}}
+      {{> users/_row}}
+    {{/each}}
+  </div>
+
+  <button hx-get="/users?page={{next_page}}"
+          hx-target="#results"
+          hx-swap="beforeend">
+    Load More
+  </button>
+</div>
+```
+
+**htmx.js Serving:**
+- Bundled: `zzz.staticFiles(.{ .dir = "public" })` — drop htmx.min.js in public/
+- CDN helper: `{{htmx_script}}` template helper emits `<script src="https://unpkg.com/htmx.org@2.0.4"></script>`
+- Or: framework ships htmx.js as embedded asset, served at `/_zzz/htmx.min.js`
+
+**htmx Middleware (optional):**
+- Auto-detects htmx requests and sets `ctx.assigns["is_htmx"] = "true"`
+- Automatically strips layout wrapping for htmx requests
+- Adds `Vary: HX-Request` header for proper caching
+
+#### 3.4 React/Vue/Svelte SSR Bridge (Future)
+
+For teams that want JS-heavy frontends with server-side rendering:
+
+```zig
+const App = Router.define(.{
+    .ssr = .{
+        .engine = .node,              // or .deno, .bun
+        .entry = "frontend/src/App.tsx",
+        .build_dir = "frontend/dist",
+    },
+    .routes = &.{
+        // API routes (JSON)
+        Router.scope("/api", &.{json_parser}, &.{
+            Router.resource("/users", UserHandlers),
+        }),
+        // SPA catch-all — SSR renders the React app, hydrates on client
+        Router.get("/*path", SsrController.render),
+    },
+});
+```
+
+- Shell out to Node/Deno/Bun for initial render
+- Pass route + props as JSON, receive rendered HTML string
+- Hydration script injection (`<script>` tag with serialized state)
+- Could also embed QuickJS for in-process JS execution (no subprocess)
+- API-only mode: skip SSR, just serve JSON + CORS for SPA dev servers
+
+**Deliverable**: `{{name}}` templates compile to fast Zig render functions. htmx-powered
+interactive CRUD app with live search, inline editing. Optional React SSR bridge.
 
 ---
 
@@ -643,10 +751,15 @@ try std.testing.expectEqualStrings("hello", reply.body);
 | sqlite3 | SQLite database |
 | zlib | gzip/deflate compression |
 
+### Bundled JS Assets
+| Asset | Purpose |
+|-------|---------|
+| htmx.min.js (~14KB gzipped) | First-class htmx support, served at `/_zzz/htmx.min.js` or user copies to `public/` |
+
 ### Optional/Future C Libraries
 | Library | Purpose |
 |---------|---------|
-| QuickJS / libv8 | In-process JS for React SSR |
+| QuickJS / libv8 | In-process JS for React/Vue/Svelte SSR |
 | libmysqlclient | MySQL support |
 | libcurl | HTTP client (for testing, webhooks) |
 
@@ -670,7 +783,7 @@ Phase 1 ──> Phase 2 ──> Phase 3 ──────────> Phase 7
 
 1. **M1 - Hello World Server**: TCP + HTTP parser + basic response (Phase 1)
 2. **M2 - Routed App**: Router + middleware + static files (Phase 2)
-3. **M3 - Templated App**: Template engine + layouts + forms (Phase 3)
+3. **M3 - Templated App**: Template engine + layouts + htmx integration + interactive CRUD (Phase 3)
 4. **M4 - Real-time**: WebSocket + channels + presence (Phase 4)
 5. **M5 - Data Layer**: PostgreSQL + queries + migrations (Phase 5)
 6. **M6 - Background Processing**: Job queue + scheduler (Phase 6)

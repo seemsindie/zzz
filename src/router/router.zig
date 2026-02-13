@@ -16,6 +16,19 @@ pub const RouteDef = struct {
     pattern: []const u8,
     handler: HandlerFn,
     middleware: []const HandlerFn = &.{},
+    name: []const u8 = "",
+
+    /// Give this route a name for reverse URL generation.
+    /// Usage: `Router.get("/users/:id", getUser).named("user_path")`
+    pub fn named(self: RouteDef, comptime route_name: []const u8) RouteDef {
+        return .{
+            .method = self.method,
+            .pattern = self.pattern,
+            .handler = self.handler,
+            .middleware = self.middleware,
+            .name = route_name,
+        };
+    }
 };
 
 /// Router configuration.
@@ -142,6 +155,7 @@ pub const Router = struct {
                     .pattern = prefix ++ r.pattern,
                     .handler = r.handler,
                     .middleware = mw ++ r.middleware,
+                    .name = r.name,
                 };
             }
             const result = expanded;
@@ -156,6 +170,67 @@ pub const Router = struct {
             /// Handler function compatible with Server's Handler type.
             pub fn handler(allocator: Allocator, req: *const Request) anyerror!Response {
                 return dispatch(config, allocator, req);
+            }
+
+            /// Look up a route's pattern by name at compile time.
+            /// Usage: `const pattern = App.pathFor("user_path");`
+            pub fn pathFor(comptime route_name: []const u8) []const u8 {
+                return comptime blk: {
+                    for (config.routes) |r| {
+                        if (r.name.len > 0 and std.mem.eql(u8, r.name, route_name)) {
+                            break :blk r.pattern;
+                        }
+                    }
+                    @compileError("unknown route name: " ++ route_name);
+                };
+            }
+
+            /// Build a URL by substituting params into a named route's pattern.
+            /// Params should be a struct with fields matching the route's parameters.
+            /// Example: `App.buildPath("user_path", &buf, .{ .id = "42" })`
+            pub fn buildPath(
+                comptime route_name: []const u8,
+                buf: []u8,
+                params: anytype,
+            ) ?[]const u8 {
+                const segments = comptime route_mod.compilePattern(pathFor(route_name));
+
+                if (segments.len == 0) {
+                    if (buf.len < 1) return null;
+                    buf[0] = '/';
+                    return buf[0..1];
+                }
+
+                var pos: usize = 0;
+                inline for (segments) |seg| {
+                    switch (seg) {
+                        .static => |lit| {
+                            if (pos + 1 + lit.len > buf.len) return null;
+                            buf[pos] = '/';
+                            pos += 1;
+                            @memcpy(buf[pos..][0..lit.len], lit);
+                            pos += lit.len;
+                        },
+                        .param => |name| {
+                            const value: []const u8 = @field(params, name);
+                            if (pos + 1 + value.len > buf.len) return null;
+                            buf[pos] = '/';
+                            pos += 1;
+                            @memcpy(buf[pos..][0..value.len], value);
+                            pos += value.len;
+                        },
+                        .wildcard => |name| {
+                            const value: []const u8 = @field(params, name);
+                            if (pos + 1 + value.len > buf.len) return null;
+                            buf[pos] = '/';
+                            pos += 1;
+                            @memcpy(buf[pos..][0..value.len], value);
+                            pos += value.len;
+                        },
+                    }
+                }
+
+                return buf[0..pos];
             }
         };
     }
@@ -558,4 +633,83 @@ test "Router.resource combined with other routes" {
         defer resp.deinit(testing.allocator);
         try testing.expectEqualStrings("posts-index", resp.body.?);
     }
+}
+
+test "RouteDef.named sets name" {
+    const H = struct {
+        fn handle(_: *Context) !void {}
+    };
+    const r = Router.get("/users/:id", H.handle).named("user_path");
+    try std.testing.expectEqualStrings("user_path", r.name);
+    try std.testing.expectEqualStrings("/users/:id", r.pattern);
+}
+
+test "Router.define pathFor resolves named routes" {
+    const H = struct {
+        fn handle(ctx: *Context) !void {
+            ctx.text(.ok, "ok");
+        }
+    };
+
+    const App = Router.define(.{
+        .routes = &.{
+            Router.get("/", H.handle).named("home"),
+            Router.get("/users/:id", H.handle).named("user_path"),
+            Router.get("/posts/:slug/comments", H.handle).named("post_comments"),
+        },
+    });
+
+    try std.testing.expectEqualStrings("/", App.pathFor("home"));
+    try std.testing.expectEqualStrings("/users/:id", App.pathFor("user_path"));
+    try std.testing.expectEqualStrings("/posts/:slug/comments", App.pathFor("post_comments"));
+}
+
+test "Router.define buildPath substitutes params" {
+    const H = struct {
+        fn handle(ctx: *Context) !void {
+            ctx.text(.ok, "ok");
+        }
+    };
+
+    const App = Router.define(.{
+        .routes = &.{
+            Router.get("/", H.handle).named("home"),
+            Router.get("/users/:id", H.handle).named("user_path"),
+            Router.get("/users/:id/posts/:post_id", H.handle).named("user_post"),
+        },
+    });
+
+    var buf: [128]u8 = undefined;
+
+    // Root path
+    const root = App.buildPath("home", &buf, .{});
+    try std.testing.expectEqualStrings("/", root.?);
+
+    // Single param
+    const user = App.buildPath("user_path", &buf, .{ .id = "42" });
+    try std.testing.expectEqualStrings("/users/42", user.?);
+
+    // Multiple params
+    const post = App.buildPath("user_post", &buf, .{ .id = "7", .post_id = "hello" });
+    try std.testing.expectEqualStrings("/users/7/posts/hello", post.?);
+}
+
+test "Router.scope preserves route names" {
+    const H = struct {
+        fn handle(ctx: *Context) !void {
+            ctx.text(.ok, "ok");
+        }
+    };
+
+    const App = Router.define(.{
+        .routes = Router.scope("/api", &.{}, &[_]RouteDef{
+            Router.get("/users/:id", H.handle).named("api_user"),
+        }),
+    });
+
+    try std.testing.expectEqualStrings("/api/users/:id", App.pathFor("api_user"));
+
+    var buf: [128]u8 = undefined;
+    const path = App.buildPath("api_user", &buf, .{ .id = "99" });
+    try std.testing.expectEqualStrings("/api/users/99", path.?);
 }

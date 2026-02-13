@@ -84,7 +84,7 @@ zig build run -- --some-arg
 - [x] Route groups / scopes with shared middleware (`Router.scope()`)
 - [x] RESTful resource helper (auto-generates index/show/create/update/delete)
 - [x] Nested route scopes (via `Router.scope()` prefix concatenation)
-- [ ] Route naming for reverse URL generation
+- [x] Route naming for reverse URL generation
 - [x] Comptime route validation (catch missing handlers at compile time)
 - [x] 405 Method Not Allowed (path matches but wrong method, with `Allow` header)
 - [x] OPTIONS route helper + CORS preflight handling (`Router.options()` + `cors.zig`)
@@ -116,9 +116,9 @@ zig build run -- --some-arg
 - [x] Session middleware (cookie-based, pluggable stores)
 - [x] gzip/deflate response compression
 - [x] Rate limiting (token bucket per IP/key)
-- [ ] Auth: Bearer token extraction
-- [ ] Auth: Basic auth
-- [ ] Auth: JWT verification
+- [x] Auth: Bearer token extraction
+- [x] Auth: Basic auth
+- [x] Auth: JWT verification
 - [x] Global error handler middleware (catch panics, render error pages)
 
 ### Controller Helpers
@@ -132,7 +132,7 @@ zig build run -- --some-arg
 
 ---
 
-## Phase 3: Template Engine
+## Phase 3: Template Engine & View Layer
 
 ### Core Engine
 - [ ] Template file format (.zzz or .html.zzz extension)
@@ -171,11 +171,24 @@ zig build run -- --some-arg
 - [ ] `{{url_for "user_path" id=user.id}}`
 - [ ] Custom helper registration
 
-### React/Vue SSR Bridge (Future)
+### htmx Integration (Built-in)
+- [ ] htmx request detection (`ctx.isHtmx()` — checks `HX-Request` header)
+- [ ] htmx response headers helper (`ctx.htmxTrigger()`, `ctx.htmxPushUrl()`, `ctx.htmxRedirect()`, `ctx.htmxReswap()`, `ctx.htmxRetarget()`)
+- [ ] Partial rendering mode — render a template fragment instead of full page when htmx request detected
+- [ ] `ctx.htmxRedirect()` — uses `HX-Redirect` header instead of 301/302 for htmx requests
+- [ ] Configurable htmx.js serving (bundled via static middleware or CDN `<script>` helper)
+- [ ] Out-of-band swap support (`HX-Trigger-After-Swap`, `HX-Trigger-After-Settle`)
+- [ ] htmx middleware — auto-detect htmx requests and set `ctx.assigns.is_htmx`
+- [ ] Template helpers for htmx attributes (e.g. `{{hx-get "/items"}}`, `{{hx-swap "outerHTML"}}`)
+- [ ] Example: htmx-powered CRUD app (inline editing, live search, infinite scroll)
+
+### React/Vue/Svelte SSR Bridge (Future)
 - [ ] Shell out to Node/Deno/Bun for initial render
 - [ ] Pass props as JSON, receive rendered HTML
 - [ ] Hydration script injection
 - [ ] Embedded QuickJS option for in-process JS
+- [ ] SSR mode flag in router config (`.ssr = .{ .engine = .node, .entry = "src/App.tsx" }`)
+- [ ] API-only mode for SPA backends (JSON routes + CORS, no templates)
 
 ---
 
@@ -470,12 +483,12 @@ zig build run -- --some-arg
 |-------|--------|------------|-----------------|
 | 1. Foundation | **In Progress** | 14 | 10 |
 | 1.5 TLS | Not Started | 0 | 8 |
-| 2. Router & Middleware | **In Progress** | 41 | 4 |
-| 3. Template Engine | Not Started | 0 | 28 |
+| 2. Router & Middleware | **Complete** | 45 | 0 |
+| 3. Templates & Views | Not Started | 0 | 42 |
 | 4. WebSocket & Channels | Not Started | 0 | 22 |
 | 5. Database (zzz_db) | Not Started | 0 | 49 |
 | 6. Jobs (zzz_jobs) | Not Started | 0 | 27 |
 | 7. Swagger | Not Started | 0 | 18 |
 | 8. Testing & CLI | Not Started | 0 | 24 |
 | Cross-Cutting | Not Started | 0 | 16 |
-| **Total** | | **55** | **200** |
+| **Total** | | **59** | **210** |

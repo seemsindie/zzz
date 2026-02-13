@@ -57,6 +57,14 @@ pub const CompressConfig = @import("middleware/compress.zig").CompressConfig;
 pub const rateLimit = @import("middleware/rate_limit.zig").rateLimit;
 pub const RateLimitConfig = @import("middleware/rate_limit.zig").RateLimitConfig;
 
+// Auth Middleware
+pub const bearerAuth = @import("middleware/auth.zig").bearerAuth;
+pub const BearerConfig = @import("middleware/auth.zig").BearerConfig;
+pub const basicAuth = @import("middleware/auth.zig").basicAuth;
+pub const BasicAuthConfig = @import("middleware/auth.zig").BasicAuthConfig;
+pub const jwtAuth = @import("middleware/auth.zig").jwtAuth;
+pub const JwtConfig = @import("middleware/auth.zig").JwtConfig;
+
 // Resource Helper (re-exported from Router)
 pub const ResourceHandlers = Router.ResourceHandlers;
 
