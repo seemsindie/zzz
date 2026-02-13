@@ -48,6 +48,19 @@ pub const Router = struct {
         return .{ .method = .DELETE, .pattern = pattern, .handler = handler };
     }
 
+    pub fn options(comptime pattern: []const u8, comptime handler: HandlerFn) RouteDef {
+        return .{ .method = .OPTIONS, .pattern = pattern, .handler = handler };
+    }
+
+    pub fn head(comptime pattern: []const u8, comptime handler: HandlerFn) RouteDef {
+        return .{ .method = .HEAD, .pattern = pattern, .handler = handler };
+    }
+
+    /// Route with an arbitrary method.
+    pub fn route(comptime method: Method, comptime pattern: []const u8, comptime handler: HandlerFn) RouteDef {
+        return .{ .method = method, .pattern = pattern, .handler = handler };
+    }
+
     /// Group routes under a common prefix with shared middleware.
     pub fn scope(
         comptime prefix: []const u8,

@@ -28,6 +28,7 @@ pub const Assigns = @import("middleware/context.zig").Assigns;
 
 // Built-in Middleware
 pub const logger = @import("middleware/logger.zig").logger;
+pub const cors = @import("middleware/cors.zig").cors;
 
 // Re-export Io for convenience
 pub const Io = @import("std").Io;

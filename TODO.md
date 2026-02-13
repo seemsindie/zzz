@@ -87,7 +87,7 @@ zig build run -- --some-arg
 - [ ] Route naming for reverse URL generation
 - [x] Comptime route validation (catch missing handlers at compile time)
 - [x] 405 Method Not Allowed (path matches but wrong method, with `Allow` header)
-- [ ] OPTIONS auto-response with allowed methods
+- [x] OPTIONS route helper + CORS preflight handling (`Router.options()` + `cors.zig`)
 - [x] HEAD auto-handling (GET without body)
 
 ### Middleware Pipeline
@@ -102,7 +102,7 @@ zig build run -- --some-arg
 ### Built-in Middleware
 - [x] Logger middleware (method, path, status, timing) (`src/middleware/logger.zig`)
 - [ ] Static file serving (directory, MIME detection, ETag, caching headers)
-- [ ] CORS middleware (configurable origins, methods, headers)
+- [x] CORS middleware (configurable origins, methods, headers) (`src/middleware/cors.zig`)
 - [ ] Body parser: JSON (application/json)
 - [ ] Body parser: URL-encoded (application/x-www-form-urlencoded)
 - [ ] Body parser: Multipart form data (file uploads)
@@ -464,7 +464,7 @@ zig build run -- --some-arg
 |-------|--------|------------|-----------------|
 | 1. Foundation | **In Progress** | 14 | 10 |
 | 1.5 TLS | Not Started | 0 | 8 |
-| 2. Router & Middleware | **In Progress** | 20 | 16 |
+| 2. Router & Middleware | **In Progress** | 22 | 14 |
 | 3. Template Engine | Not Started | 0 | 28 |
 | 4. WebSocket & Channels | Not Started | 0 | 22 |
 | 5. Database (zzz_db) | Not Started | 0 | 49 |
@@ -472,4 +472,4 @@ zig build run -- --some-arg
 | 7. Swagger | Not Started | 0 | 18 |
 | 8. Testing & CLI | Not Started | 0 | 24 |
 | Cross-Cutting | Not Started | 0 | 16 |
-| **Total** | | **34** | **218** |
+| **Total** | | **36** | **216** |
