@@ -103,9 +103,15 @@ zig build run -- --some-arg
 - [x] Logger middleware (method, path, status, timing) (`src/middleware/logger.zig`)
 - [x] Static file serving (directory, MIME detection, ETag, caching headers) (`src/middleware/static.zig`)
 - [x] CORS middleware (configurable origins, methods, headers) (`src/middleware/cors.zig`)
-- [ ] Body parser: JSON (application/json)
-- [ ] Body parser: URL-encoded (application/x-www-form-urlencoded)
-- [ ] Body parser: Multipart form data (file uploads)
+- [x] Body parser: JSON (application/json)
+- [x] Body parser: URL-encoded (application/x-www-form-urlencoded)
+- [x] Body parser: Multipart form data (file uploads)
+- [x] Body parser: text/* and binary fallback
+- [x] Unified `ctx.param()` (path -> body -> query, Phoenix-style)
+- [x] `ctx.pathParam()`, `ctx.formValue()`, `ctx.jsonBody()`, `ctx.rawBody()`, `ctx.file()`
+- [x] `FormData` fixed-size key-value store (32 fields)
+- [x] `FilePart` / `MultipartData` types for file uploads
+- [x] `urlDecode()` percent-encoding decoder
 - [ ] CSRF protection (token generation/validation)
 - [ ] Session middleware (cookie-based, pluggable stores)
 - [ ] gzip/deflate response compression
@@ -464,7 +470,7 @@ zig build run -- --some-arg
 |-------|--------|------------|-----------------|
 | 1. Foundation | **In Progress** | 14 | 10 |
 | 1.5 TLS | Not Started | 0 | 8 |
-| 2. Router & Middleware | **In Progress** | 23 | 13 |
+| 2. Router & Middleware | **In Progress** | 32 | 7 |
 | 3. Template Engine | Not Started | 0 | 28 |
 | 4. WebSocket & Channels | Not Started | 0 | 22 |
 | 5. Database (zzz_db) | Not Started | 0 | 49 |
@@ -472,4 +478,4 @@ zig build run -- --some-arg
 | 7. Swagger | Not Started | 0 | 18 |
 | 8. Testing & CLI | Not Started | 0 | 24 |
 | Cross-Cutting | Not Started | 0 | 16 |
-| **Total** | | **37** | **215** |
+| **Total** | | **46** | **209** |

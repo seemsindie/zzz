@@ -30,6 +30,13 @@ pub const Assigns = @import("middleware/context.zig").Assigns;
 pub const logger = @import("middleware/logger.zig").logger;
 pub const cors = @import("middleware/cors.zig").cors;
 pub const staticFiles = @import("middleware/static.zig").staticFiles;
+pub const bodyParser = @import("middleware/body_parser.zig").bodyParser;
+
+// Body Parser Types
+pub const FormData = @import("middleware/body_parser.zig").FormData;
+pub const ParsedBody = @import("middleware/body_parser.zig").ParsedBody;
+pub const FilePart = @import("middleware/body_parser.zig").FilePart;
+pub const urlDecode = @import("middleware/body_parser.zig").urlDecode;
 
 // Re-export Io for convenience
 pub const Io = @import("std").Io;
