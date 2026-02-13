@@ -26,6 +26,9 @@ pub const HandlerFn = @import("middleware/context.zig").HandlerFn;
 pub const Params = @import("middleware/context.zig").Params;
 pub const Assigns = @import("middleware/context.zig").Assigns;
 
+// Built-in Middleware
+pub const logger = @import("middleware/logger.zig").logger;
+
 // Re-export Io for convenience
 pub const Io = @import("std").Io;
 

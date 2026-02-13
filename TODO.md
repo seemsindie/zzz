@@ -100,7 +100,7 @@ zig build run -- --some-arg
 - [x] Query string parsing into params
 
 ### Built-in Middleware
-- [ ] Logger middleware (method, path, status, timing)
+- [x] Logger middleware (method, path, status, timing) (`src/middleware/logger.zig`)
 - [ ] Static file serving (directory, MIME detection, ETag, caching headers)
 - [ ] CORS middleware (configurable origins, methods, headers)
 - [ ] Body parser: JSON (application/json)
@@ -464,7 +464,7 @@ zig build run -- --some-arg
 |-------|--------|------------|-----------------|
 | 1. Foundation | **In Progress** | 14 | 10 |
 | 1.5 TLS | Not Started | 0 | 8 |
-| 2. Router & Middleware | **In Progress** | 19 | 17 |
+| 2. Router & Middleware | **In Progress** | 20 | 16 |
 | 3. Template Engine | Not Started | 0 | 28 |
 | 4. WebSocket & Channels | Not Started | 0 | 22 |
 | 5. Database (zzz_db) | Not Started | 0 | 49 |
@@ -472,4 +472,4 @@ zig build run -- --some-arg
 | 7. Swagger | Not Started | 0 | 18 |
 | 8. Testing & CLI | Not Started | 0 | 24 |
 | Cross-Cutting | Not Started | 0 | 16 |
-| **Total** | | **33** | **219** |
+| **Total** | | **34** | **218** |

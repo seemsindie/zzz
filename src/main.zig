@@ -2,6 +2,7 @@ const std = @import("std");
 const zzz = @import("zzz");
 
 const App = zzz.Router.define(.{
+    .middleware = &.{zzz.logger},
     .routes = &.{
         zzz.Router.get("/", indexHandler),
         zzz.Router.get("/hello", helloHandler),
