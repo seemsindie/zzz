@@ -50,7 +50,7 @@ pub fn main(init: std.process.Init) !void {
 
     var server = zzz.Server.init(allocator, .{
         .host = "127.0.0.1",
-        .port = 8888,
+        .port = 5555,
     }, App.handler);
 
     try server.listen(io);

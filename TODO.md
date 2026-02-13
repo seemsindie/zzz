@@ -9,19 +9,19 @@ zig build
 
 # Run the server
 zig build run
-# Server starts at http://127.0.0.1:8888
+# Server starts at http://127.0.0.1:5555
 
 # Run all tests
 zig build test
 
 # Test with curl (in another terminal)
-curl http://127.0.0.1:8888/              # HTML welcome page
-curl http://127.0.0.1:8888/hello         # Plain text
-curl http://127.0.0.1:8888/json          # JSON response
-curl http://127.0.0.1:8888/users/42      # Path param extraction
-curl http://127.0.0.1:8888/missing       # 404 Not Found
-curl -X POST http://127.0.0.1:8888/hello # 405 Method Not Allowed
-curl -I http://127.0.0.1:8888/hello      # HEAD (headers only, no body)
+curl http://127.0.0.1:5555/              # HTML welcome page
+curl http://127.0.0.1:5555/hello         # Plain text
+curl http://127.0.0.1:5555/json          # JSON response
+curl http://127.0.0.1:5555/users/42      # Path param extraction
+curl http://127.0.0.1:5555/missing       # 404 Not Found
+curl -X POST http://127.0.0.1:5555/hello # 405 Method Not Allowed
+curl -I http://127.0.0.1:5555/hello      # HEAD (headers only, no body)
 
 # Build optimized release
 zig build -Doptimize=ReleaseFast
@@ -101,7 +101,7 @@ zig build run -- --some-arg
 
 ### Built-in Middleware
 - [x] Logger middleware (method, path, status, timing) (`src/middleware/logger.zig`)
-- [ ] Static file serving (directory, MIME detection, ETag, caching headers)
+- [x] Static file serving (directory, MIME detection, ETag, caching headers) (`src/middleware/static.zig`)
 - [x] CORS middleware (configurable origins, methods, headers) (`src/middleware/cors.zig`)
 - [ ] Body parser: JSON (application/json)
 - [ ] Body parser: URL-encoded (application/x-www-form-urlencoded)
@@ -464,7 +464,7 @@ zig build run -- --some-arg
 |-------|--------|------------|-----------------|
 | 1. Foundation | **In Progress** | 14 | 10 |
 | 1.5 TLS | Not Started | 0 | 8 |
-| 2. Router & Middleware | **In Progress** | 22 | 14 |
+| 2. Router & Middleware | **In Progress** | 23 | 13 |
 | 3. Template Engine | Not Started | 0 | 28 |
 | 4. WebSocket & Channels | Not Started | 0 | 22 |
 | 5. Database (zzz_db) | Not Started | 0 | 49 |
@@ -472,4 +472,4 @@ zig build run -- --some-arg
 | 7. Swagger | Not Started | 0 | 18 |
 | 8. Testing & CLI | Not Started | 0 | 24 |
 | Cross-Cutting | Not Started | 0 | 16 |
-| **Total** | | **36** | **216** |
+| **Total** | | **37** | **215** |

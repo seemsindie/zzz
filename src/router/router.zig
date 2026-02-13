@@ -120,84 +120,107 @@ fn makePipelineStep(comptime pipeline: []const HandlerFn, comptime index: usize)
     return &S.run;
 }
 
-/// Internal dispatch: inline for over routes, match, build context, run pipeline.
+/// The route dispatcher — runs as the terminal handler in the global middleware pipeline.
+/// Matches routes, builds per-route middleware chain, runs it.
+fn makeRouteDispatcher(comptime config: RouterConfig) HandlerFn {
+    const S = struct {
+        fn handle(ctx: *Context) anyerror!void {
+            const path = ctx.request.path;
+            const method = ctx.request.method;
+            const also_try_get = (method == .HEAD);
+
+            // Try each route
+            inline for (config.routes) |route_def| {
+                const segments = comptime route_mod.compilePattern(route_def.pattern);
+
+                if (route_def.method == method or (also_try_get and route_def.method == .GET)) {
+                    if (route_mod.matchSegments(segments, path)) |match_params| {
+                        ctx.params = match_params;
+
+                        // Build per-route pipeline: route middleware ++ handler
+                        const route_pipeline = comptime route_def.middleware ++ &[_]HandlerFn{route_def.handler};
+
+                        if (route_pipeline.len > 0) {
+                            const entry = comptime makePipelineEntry(route_pipeline);
+                            // Save and restore next_handler so route pipeline chains correctly
+                            const saved = ctx.next_handler;
+                            try entry(ctx);
+                            ctx.next_handler = saved;
+                        }
+
+                        return;
+                    }
+                }
+            }
+
+            // No match — check if path matches with a different method (405)
+            var path_matches = false;
+            var allow_buf: [128]u8 = undefined;
+            var allow_pos: usize = 0;
+
+            inline for (config.routes) |route_def| {
+                const segments = comptime route_mod.compilePattern(route_def.pattern);
+                if (route_mod.matchSegments(segments, path) != null) {
+                    path_matches = true;
+                    const mname = comptime route_def.method.toString();
+                    if (allow_pos > 0 and allow_pos + 2 < allow_buf.len) {
+                        allow_buf[allow_pos] = ',';
+                        allow_buf[allow_pos + 1] = ' ';
+                        allow_pos += 2;
+                    }
+                    if (allow_pos + mname.len <= allow_buf.len) {
+                        @memcpy(allow_buf[allow_pos..][0..mname.len], mname);
+                        allow_pos += mname.len;
+                    }
+                }
+            }
+
+            if (path_matches) {
+                ctx.response.status = .method_not_allowed;
+                ctx.response.headers.append(ctx.allocator, "Allow", allow_buf[0..allow_pos]) catch {};
+                ctx.respond(.method_not_allowed, "text/plain; charset=utf-8", "405 Method Not Allowed");
+                return;
+            }
+
+            // 404
+            ctx.respond(.not_found, "text/plain; charset=utf-8", "404 Not Found");
+        }
+    };
+    return &S.handle;
+}
+
+/// Internal dispatch: run global middleware pipeline with route dispatcher as terminal handler.
 fn dispatch(
     comptime config: RouterConfig,
     allocator: Allocator,
     req: *const Request,
 ) anyerror!Response {
-    const path = req.path;
-    const method = req.method;
+    // Build pipeline: global middleware ++ route dispatcher
+    const route_dispatcher = comptime makeRouteDispatcher(config);
+    const pipeline = comptime config.middleware ++ &[_]HandlerFn{route_dispatcher};
+    const entry = comptime makePipelineEntry(pipeline);
 
-    // For HEAD requests, also match GET routes
-    const also_try_get = (method == .HEAD);
+    var ctx: Context = .{
+        .request = req,
+        .response = .{},
+        .params = .{},
+        .query = parseQuery(req.query_string),
+        .assigns = .{},
+        .allocator = allocator,
+        .next_handler = null,
+    };
 
-    // Try each route — inline for generates comptime-specialized branches
-    inline for (config.routes) |route_def| {
-        const segments = comptime route_mod.compilePattern(route_def.pattern);
+    entry(&ctx) catch |err| {
+        ctx.response.deinit(allocator);
+        return err;
+    };
 
-        if (route_def.method == method or (also_try_get and route_def.method == .GET)) {
-            if (route_mod.matchSegments(segments, path)) |match_params| {
-                // Build pipeline at comptime: global middleware ++ route middleware ++ handler
-                const pipeline = comptime config.middleware ++ route_def.middleware ++ &[_]HandlerFn{route_def.handler};
-                const entry = comptime makePipelineEntry(pipeline);
-
-                var ctx: Context = .{
-                    .request = req,
-                    .response = .{},
-                    .params = match_params,
-                    .query = parseQuery(req.query_string),
-                    .assigns = .{},
-                    .allocator = allocator,
-                    .next_handler = null,
-                };
-
-                entry(&ctx) catch |err| {
-                    ctx.response.deinit(allocator);
-                    return err;
-                };
-
-                // HEAD: clear body but keep headers
-                if (method == .HEAD) {
-                    ctx.response.body = null;
-                }
-
-                return ctx.response;
-            }
-        }
+    // HEAD: clear body but keep headers
+    if (req.method == .HEAD) {
+        ctx.response.body = null;
     }
 
-    // No match — check if path matches with a different method (405)
-    var path_matches = false;
-    var allow_buf: [128]u8 = undefined;
-    var allow_pos: usize = 0;
-
-    inline for (config.routes) |route_def| {
-        const segments = comptime route_mod.compilePattern(route_def.pattern);
-        if (route_mod.matchSegments(segments, path) != null) {
-            path_matches = true;
-            const mname = comptime route_def.method.toString();
-            if (allow_pos > 0 and allow_pos + 2 < allow_buf.len) {
-                allow_buf[allow_pos] = ',';
-                allow_buf[allow_pos + 1] = ' ';
-                allow_pos += 2;
-            }
-            if (allow_pos + mname.len <= allow_buf.len) {
-                @memcpy(allow_buf[allow_pos..][0..mname.len], mname);
-                allow_pos += mname.len;
-            }
-        }
-    }
-
-    if (path_matches) {
-        var resp: Response = .{ .status = .method_not_allowed };
-        try resp.headers.append(allocator, "Allow", allow_buf[0..allow_pos]);
-        try resp.setBody(allocator, "text/plain; charset=utf-8", "405 Method Not Allowed");
-        return resp;
-    }
-
-    // 404
-    return Response.text(allocator, .not_found, "404 Not Found");
+    return ctx.response;
 }
 
 /// Parse a query string into Params. E.g. "foo=bar&baz=qux"

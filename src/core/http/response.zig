@@ -8,8 +8,15 @@ pub const Response = struct {
     status: StatusCode = .ok,
     headers: Headers = .{},
     body: ?[]const u8 = null,
+    /// When true, `deinit` will free the body slice via the allocator.
+    body_owned: bool = false,
 
     pub fn deinit(self: *Response, allocator: Allocator) void {
+        if (self.body_owned) {
+            if (self.body) |b| {
+                allocator.free(@constCast(b));
+            }
+        }
         self.headers.deinit(allocator);
     }
 
