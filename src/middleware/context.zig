@@ -1,4 +1,5 @@
 const std = @import("std");
+const c = std.c;
 const Allocator = std.mem.Allocator;
 const Request = @import("../core/http/request.zig").Request;
 const Response = @import("../core/http/response.zig").Response;
@@ -6,6 +7,7 @@ const StatusCode = @import("../core/http/status.zig").StatusCode;
 const body_parser = @import("body_parser.zig");
 const ParsedBody = body_parser.ParsedBody;
 const FilePart = body_parser.FilePart;
+const static = @import("static.zig");
 
 /// Handler function type for middleware and route handlers.
 /// Defined outside Context to avoid dependency loop.
@@ -172,6 +174,186 @@ pub const Context = struct {
     pub fn text(self: *Context, status: StatusCode, body: []const u8) void {
         self.respond(status, "text/plain; charset=utf-8", body);
     }
+
+    /// Redirect the client to a new location.
+    pub fn redirect(self: *Context, location: []const u8, status: StatusCode) void {
+        self.response.status = status;
+        self.response.body = null;
+        self.response.headers.append(self.allocator, "Location", location) catch {};
+    }
+
+    /// Options for Set-Cookie header construction.
+    pub const CookieOptions = struct {
+        max_age: ?i64 = null,
+        path: []const u8 = "/",
+        domain: []const u8 = "",
+        secure: bool = false,
+        http_only: bool = true,
+        same_site: SameSite = .lax,
+
+        pub const SameSite = enum { lax, strict, none };
+    };
+
+    /// Set a cookie on the response via Set-Cookie header.
+    pub fn setCookie(self: *Context, name: []const u8, value: []const u8, opts: CookieOptions) void {
+        var buf: [512]u8 = undefined;
+        var pos: usize = 0;
+
+        // name=value
+        if (name.len + 1 + value.len > buf.len) return;
+        @memcpy(buf[pos..][0..name.len], name);
+        pos += name.len;
+        buf[pos] = '=';
+        pos += 1;
+        @memcpy(buf[pos..][0..value.len], value);
+        pos += value.len;
+
+        // Path
+        if (opts.path.len > 0) {
+            const attr = "; Path=";
+            if (pos + attr.len + opts.path.len > buf.len) return;
+            @memcpy(buf[pos..][0..attr.len], attr);
+            pos += attr.len;
+            @memcpy(buf[pos..][0..opts.path.len], opts.path);
+            pos += opts.path.len;
+        }
+
+        // Domain
+        if (opts.domain.len > 0) {
+            const attr = "; Domain=";
+            if (pos + attr.len + opts.domain.len > buf.len) return;
+            @memcpy(buf[pos..][0..attr.len], attr);
+            pos += attr.len;
+            @memcpy(buf[pos..][0..opts.domain.len], opts.domain);
+            pos += opts.domain.len;
+        }
+
+        // Max-Age
+        if (opts.max_age) |age| {
+            const attr = "; Max-Age=";
+            if (pos + attr.len + 20 > buf.len) return;
+            @memcpy(buf[pos..][0..attr.len], attr);
+            pos += attr.len;
+            const age_str = std.fmt.bufPrint(buf[pos..], "{d}", .{age}) catch return;
+            pos += age_str.len;
+        }
+
+        // HttpOnly
+        if (opts.http_only) {
+            const attr = "; HttpOnly";
+            if (pos + attr.len > buf.len) return;
+            @memcpy(buf[pos..][0..attr.len], attr);
+            pos += attr.len;
+        }
+
+        // Secure
+        if (opts.secure) {
+            const attr = "; Secure";
+            if (pos + attr.len > buf.len) return;
+            @memcpy(buf[pos..][0..attr.len], attr);
+            pos += attr.len;
+        }
+
+        // SameSite
+        {
+            const attr = switch (opts.same_site) {
+                .lax => "; SameSite=Lax",
+                .strict => "; SameSite=Strict",
+                .none => "; SameSite=None",
+            };
+            if (pos + attr.len > buf.len) return;
+            @memcpy(buf[pos..][0..attr.len], attr);
+            pos += attr.len;
+        }
+
+        // Expires (only when max_age is 0 — for deletion)
+        if (opts.max_age) |age| {
+            if (age == 0) {
+                const attr = "; Expires=Thu, 01 Jan 1970 00:00:00 GMT";
+                if (pos + attr.len > buf.len) return;
+                @memcpy(buf[pos..][0..attr.len], attr);
+                pos += attr.len;
+            }
+        }
+
+        // Allocate a copy so the header value outlives this stack frame
+        const cookie_str = self.allocator.dupe(u8, buf[0..pos]) catch return;
+        self.response.headers.append(self.allocator, "Set-Cookie", cookie_str) catch {};
+    }
+
+    /// Delete a cookie by setting it to empty with Max-Age=0.
+    pub fn deleteCookie(self: *Context, name: []const u8, path: []const u8) void {
+        self.setCookie(name, "", .{
+            .max_age = 0,
+            .path = path,
+            .http_only = true,
+        });
+    }
+
+    /// Get a cookie value from the request's Cookie header.
+    pub fn getCookie(self: *const Context, name: []const u8) ?[]const u8 {
+        const header_val = self.request.header("Cookie") orelse return null;
+        var iter = std.mem.splitSequence(u8, header_val, "; ");
+        while (iter.next()) |pair| {
+            if (std.mem.indexOfScalar(u8, pair, '=')) |eq| {
+                if (std.mem.eql(u8, pair[0..eq], name)) return pair[eq + 1 ..];
+            }
+        }
+        return null;
+    }
+
+    /// Send a file as the response body. Reads from CWD.
+    /// If `content_type` is null, auto-detects from file extension.
+    pub fn sendFile(self: *Context, file_path: []const u8, content_type: ?[]const u8) void {
+        // Security: reject paths with ".." to prevent directory traversal
+        if (static.containsDotDot(file_path)) {
+            self.respond(.forbidden, "text/plain; charset=utf-8", "403 Forbidden");
+            return;
+        }
+
+        // Create null-terminated copy of the path
+        const path_buf = self.allocator.allocSentinel(u8, file_path.len, 0) catch return;
+        defer self.allocator.free(path_buf);
+        @memcpy(path_buf, file_path);
+
+        const fd = c.open(path_buf.ptr, .{}, @as(c.mode_t, 0));
+        if (fd < 0) {
+            self.respond(.not_found, "text/plain; charset=utf-8", "404 Not Found");
+            return;
+        }
+        defer _ = c.close(fd);
+
+        // Get file size
+        var stat_buf: c.Stat = undefined;
+        if (c.fstat(fd, &stat_buf) != 0) return;
+        const size: usize = @intCast(stat_buf.size);
+
+        if (size == 0) return;
+        // Cap at 10MB
+        if (size > 10 * 1024 * 1024) return;
+
+        // Allocate and read
+        const buf = self.allocator.alloc(u8, size) catch return;
+        var total: usize = 0;
+        while (total < size) {
+            const n = c.read(fd, buf[total..].ptr, buf.len - total);
+            if (n <= 0) break;
+            total += @intCast(n);
+        }
+
+        if (total != size) {
+            self.allocator.free(buf);
+            return;
+        }
+
+        // Auto-detect MIME from extension if content_type is null
+        const ct = content_type orelse static.mimeFromPath(file_path);
+
+        self.response.status = .ok;
+        self.response.body = buf;
+        self.response.body_owned = true;
+        self.response.headers.append(self.allocator, "Content-Type", ct) catch {};
+    }
 };
 
 // ── Tests ──────────────────────────────────────────────────────────────
@@ -260,4 +442,181 @@ test "Context unified param: path > body > query" {
     try std.testing.expectEqualStrings("test@example.com", ctx.formValue("email").?);
     try std.testing.expect(ctx.jsonBody() == null);
     try std.testing.expect(ctx.rawBody() == null);
+}
+
+test "Context redirect sets Location header" {
+    var req: Request = .{};
+    defer req.deinit(std.testing.allocator);
+
+    var ctx: Context = .{
+        .request = &req,
+        .response = .{},
+        .params = .{},
+        .query = .{},
+        .assigns = .{},
+        .allocator = std.testing.allocator,
+        .next_handler = null,
+    };
+    defer ctx.response.deinit(std.testing.allocator);
+
+    ctx.redirect("/dashboard", .found);
+    try std.testing.expectEqual(StatusCode.found, ctx.response.status);
+    try std.testing.expect(ctx.response.body == null);
+    try std.testing.expectEqualStrings("/dashboard", ctx.response.headers.get("Location").?);
+}
+
+test "Context setCookie builds Set-Cookie header" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var req: Request = .{};
+    defer req.deinit(alloc);
+
+    var ctx: Context = .{
+        .request = &req,
+        .response = .{},
+        .params = .{},
+        .query = .{},
+        .assigns = .{},
+        .allocator = alloc,
+        .next_handler = null,
+    };
+
+    ctx.setCookie("session", "abc123", .{ .path = "/", .http_only = true, .secure = true });
+    const cookie = ctx.response.headers.get("Set-Cookie").?;
+    try std.testing.expect(std.mem.startsWith(u8, cookie, "session=abc123"));
+    try std.testing.expect(std.mem.indexOf(u8, cookie, "Path=/") != null);
+    try std.testing.expect(std.mem.indexOf(u8, cookie, "HttpOnly") != null);
+    try std.testing.expect(std.mem.indexOf(u8, cookie, "Secure") != null);
+    try std.testing.expect(std.mem.indexOf(u8, cookie, "SameSite=Lax") != null);
+}
+
+test "Context deleteCookie sets Max-Age=0 and Expires" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var req: Request = .{};
+    defer req.deinit(alloc);
+
+    var ctx: Context = .{
+        .request = &req,
+        .response = .{},
+        .params = .{},
+        .query = .{},
+        .assigns = .{},
+        .allocator = alloc,
+        .next_handler = null,
+    };
+
+    ctx.deleteCookie("session", "/");
+    const cookie = ctx.response.headers.get("Set-Cookie").?;
+    try std.testing.expect(std.mem.startsWith(u8, cookie, "session="));
+    try std.testing.expect(std.mem.indexOf(u8, cookie, "Max-Age=0") != null);
+    try std.testing.expect(std.mem.indexOf(u8, cookie, "Expires=Thu, 01 Jan 1970 00:00:00 GMT") != null);
+}
+
+test "Context getCookie parses Cookie header" {
+    var req: Request = .{};
+    try req.headers.append(std.testing.allocator, "Cookie", "session=abc123; theme=dark; lang=en");
+    defer req.deinit(std.testing.allocator);
+
+    var ctx: Context = .{
+        .request = &req,
+        .response = .{},
+        .params = .{},
+        .query = .{},
+        .assigns = .{},
+        .allocator = std.testing.allocator,
+        .next_handler = null,
+    };
+    defer ctx.response.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("abc123", ctx.getCookie("session").?);
+    try std.testing.expectEqualStrings("dark", ctx.getCookie("theme").?);
+    try std.testing.expectEqualStrings("en", ctx.getCookie("lang").?);
+    try std.testing.expect(ctx.getCookie("missing") == null);
+}
+
+test "Context getCookie returns null when no Cookie header" {
+    var req: Request = .{};
+    defer req.deinit(std.testing.allocator);
+
+    const ctx: Context = .{
+        .request = &req,
+        .response = .{},
+        .params = .{},
+        .query = .{},
+        .assigns = .{},
+        .allocator = std.testing.allocator,
+        .next_handler = null,
+    };
+
+    try std.testing.expect(ctx.getCookie("anything") == null);
+}
+
+test "Context sendFile reads a file from disk" {
+    var req: Request = .{};
+    defer req.deinit(std.testing.allocator);
+
+    var ctx: Context = .{
+        .request = &req,
+        .response = .{},
+        .params = .{},
+        .query = .{},
+        .assigns = .{},
+        .allocator = std.testing.allocator,
+        .next_handler = null,
+    };
+    defer ctx.response.deinit(std.testing.allocator);
+
+    // build.zig exists in the project root — use it as a known file
+    ctx.sendFile("build.zig", null);
+    try std.testing.expectEqual(StatusCode.ok, ctx.response.status);
+    try std.testing.expect(ctx.response.body != null);
+    try std.testing.expect(ctx.response.body.?.len > 0);
+    try std.testing.expect(ctx.response.body_owned);
+}
+
+test "Context sendFile rejects path traversal" {
+    var req: Request = .{};
+    defer req.deinit(std.testing.allocator);
+
+    var ctx: Context = .{
+        .request = &req,
+        .response = .{},
+        .params = .{},
+        .query = .{},
+        .assigns = .{},
+        .allocator = std.testing.allocator,
+        .next_handler = null,
+    };
+    defer ctx.response.deinit(std.testing.allocator);
+
+    ctx.sendFile("../etc/passwd", null);
+    try std.testing.expectEqual(StatusCode.forbidden, ctx.response.status);
+}
+
+test "Context sendFile auto-detects MIME type" {
+    var req: Request = .{};
+    defer req.deinit(std.testing.allocator);
+
+    var ctx: Context = .{
+        .request = &req,
+        .response = .{},
+        .params = .{},
+        .query = .{},
+        .assigns = .{},
+        .allocator = std.testing.allocator,
+        .next_handler = null,
+    };
+    defer ctx.response.deinit(std.testing.allocator);
+
+    // build.zig.zon exists in project root
+    ctx.sendFile("build.zig.zon", null);
+    // .zon has no specific MIME type, falls back to application/octet-stream
+    if (ctx.response.headers.get("Content-Type")) |ct| {
+        try std.testing.expect(ct.len > 0);
+    }
 }

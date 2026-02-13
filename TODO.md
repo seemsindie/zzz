@@ -82,7 +82,7 @@ zig build run -- --some-arg
 - [x] Wildcard path matching (`*path`) (`src/router/route.zig` — `Segment.wildcard`)
 - [x] HTTP method dispatch (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS) (`src/router/router.zig`)
 - [x] Route groups / scopes with shared middleware (`Router.scope()`)
-- [ ] RESTful resource helper (auto-generates index/show/create/update/delete)
+- [x] RESTful resource helper (auto-generates index/show/create/update/delete)
 - [x] Nested route scopes (via `Router.scope()` prefix concatenation)
 - [ ] Route naming for reverse URL generation
 - [x] Comptime route validation (catch missing handlers at compile time)
@@ -112,23 +112,23 @@ zig build run -- --some-arg
 - [x] `FormData` fixed-size key-value store (32 fields)
 - [x] `FilePart` / `MultipartData` types for file uploads
 - [x] `urlDecode()` percent-encoding decoder
-- [ ] CSRF protection (token generation/validation)
-- [ ] Session middleware (cookie-based, pluggable stores)
-- [ ] gzip/deflate response compression
-- [ ] Rate limiting (token bucket per IP/key)
+- [x] CSRF protection (token generation/validation)
+- [x] Session middleware (cookie-based, pluggable stores)
+- [x] gzip/deflate response compression
+- [x] Rate limiting (token bucket per IP/key)
 - [ ] Auth: Bearer token extraction
 - [ ] Auth: Basic auth
 - [ ] Auth: JWT verification
-- [ ] Global error handler middleware (catch panics, render error pages)
+- [x] Global error handler middleware (catch panics, render error pages)
 
 ### Controller Helpers
 - [x] json() response helper (`ctx.json()`)
 - [x] html() response helper (`ctx.html()`)
 - [x] text() response helper (`ctx.text()`)
 - [x] respond() generic helper with content type (`ctx.respond()`)
-- [ ] redirect() helper on Context
-- [ ] send_file() for file downloads
-- [ ] set_cookie() / delete_cookie()
+- [x] redirect() helper on Context
+- [x] send_file() for file downloads
+- [x] set_cookie() / delete_cookie()
 
 ---
 
@@ -470,7 +470,7 @@ zig build run -- --some-arg
 |-------|--------|------------|-----------------|
 | 1. Foundation | **In Progress** | 14 | 10 |
 | 1.5 TLS | Not Started | 0 | 8 |
-| 2. Router & Middleware | **In Progress** | 32 | 7 |
+| 2. Router & Middleware | **In Progress** | 41 | 4 |
 | 3. Template Engine | Not Started | 0 | 28 |
 | 4. WebSocket & Channels | Not Started | 0 | 22 |
 | 5. Database (zzz_db) | Not Started | 0 | 49 |
@@ -478,4 +478,4 @@ zig build run -- --some-arg
 | 7. Swagger | Not Started | 0 | 18 |
 | 8. Testing & CLI | Not Started | 0 | 24 |
 | Cross-Cutting | Not Started | 0 | 16 |
-| **Total** | | **46** | **209** |
+| **Total** | | **55** | **200** |

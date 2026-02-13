@@ -61,6 +61,73 @@ pub const Router = struct {
         return .{ .method = method, .pattern = pattern, .handler = handler };
     }
 
+    /// RESTful resource handlers for auto-generating CRUD routes.
+    pub const ResourceHandlers = struct {
+        index: ?HandlerFn = null, // GET /prefix
+        show: ?HandlerFn = null, // GET /prefix/:id
+        create: ?HandlerFn = null, // POST /prefix
+        update: ?HandlerFn = null, // PUT /prefix/:id
+        delete_handler: ?HandlerFn = null, // DELETE /prefix/:id
+        edit: ?HandlerFn = null, // GET /prefix/:id/edit
+        new: ?HandlerFn = null, // GET /prefix/new
+        middleware: []const HandlerFn = &.{},
+    };
+
+    /// Generate RESTful CRUD routes for a resource prefix.
+    /// Returns a slice of RouteDefs that can be concatenated with `++`.
+    ///
+    /// Usage:
+    ///   .routes = Router.resource("/api/users", .{ .index = listUsers, .show = getUser }) ++ &.{
+    ///       Router.get("/", index),
+    ///   },
+    pub fn resource(comptime prefix: []const u8, comptime h: ResourceHandlers) []const RouteDef {
+        comptime {
+            var count = 0;
+            if (h.index != null) count += 1;
+            if (h.show != null) count += 1;
+            if (h.create != null) count += 1;
+            if (h.update != null) count += 1;
+            if (h.delete_handler != null) count += 1;
+            if (h.edit != null) count += 1;
+            if (h.new != null) count += 1;
+
+            var routes: [count]RouteDef = undefined;
+            var i = 0;
+
+            if (h.index) |handler| {
+                routes[i] = .{ .method = .GET, .pattern = prefix, .handler = handler, .middleware = h.middleware };
+                i += 1;
+            }
+            if (h.new) |handler| {
+                routes[i] = .{ .method = .GET, .pattern = prefix ++ "/new", .handler = handler, .middleware = h.middleware };
+                i += 1;
+            }
+            if (h.create) |handler| {
+                routes[i] = .{ .method = .POST, .pattern = prefix, .handler = handler, .middleware = h.middleware };
+                i += 1;
+            }
+            if (h.show) |handler| {
+                routes[i] = .{ .method = .GET, .pattern = prefix ++ "/:id", .handler = handler, .middleware = h.middleware };
+                i += 1;
+            }
+            if (h.edit) |handler| {
+                routes[i] = .{ .method = .GET, .pattern = prefix ++ "/:id/edit", .handler = handler, .middleware = h.middleware };
+                i += 1;
+            }
+            if (h.update) |handler| {
+                routes[i] = .{ .method = .PUT, .pattern = prefix ++ "/:id", .handler = handler, .middleware = h.middleware };
+                i += 1;
+            }
+            if (h.delete_handler) |handler| {
+                routes[i] = .{ .method = .DELETE, .pattern = prefix ++ "/:id", .handler = handler, .middleware = h.middleware };
+                i += 1;
+            }
+
+            const result = routes;
+            return &result;
+        }
+    }
+
     /// Group routes under a common prefix with shared middleware.
     pub fn scope(
         comptime prefix: []const u8,
@@ -125,6 +192,7 @@ fn makePipelineStep(comptime pipeline: []const HandlerFn, comptime index: usize)
 fn makeRouteDispatcher(comptime config: RouterConfig) HandlerFn {
     const S = struct {
         fn handle(ctx: *Context) anyerror!void {
+            @setEvalBranchQuota(10_000);
             const path = ctx.request.path;
             const method = ctx.request.method;
             const also_try_get = (method == .HEAD);
@@ -384,4 +452,110 @@ test "parseQuery" {
     try std.testing.expectEqualStrings("qux", q.get("baz").?);
     try std.testing.expectEqualStrings("", q.get("empty").?);
     try std.testing.expect(q.get("missing") == null);
+}
+
+test "Router.resource generates RESTful routes" {
+    const testing = std.testing;
+
+    const Handlers = struct {
+        fn index(ctx: *Context) !void {
+            ctx.json(.ok, "[\"list\"]");
+        }
+        fn show(ctx: *Context) !void {
+            const id = ctx.param("id") orelse "0";
+            ctx.text(.ok, id);
+        }
+        fn create(ctx: *Context) !void {
+            ctx.json(.created, "{\"created\":true}");
+        }
+    };
+
+    const App = Router.define(.{
+        .routes = Router.resource("/api/items", .{
+            .index = Handlers.index,
+            .show = Handlers.show,
+            .create = Handlers.create,
+        }),
+    });
+
+    // GET /api/items — index
+    {
+        var req: Request = .{ .method = .GET, .path = "/api/items" };
+        defer req.deinit(testing.allocator);
+        var resp = try App.handler(testing.allocator, &req);
+        defer resp.deinit(testing.allocator);
+        try testing.expectEqual(StatusCode.ok, resp.status);
+        try testing.expectEqualStrings("[\"list\"]", resp.body.?);
+    }
+
+    // GET /api/items/42 — show
+    {
+        var req: Request = .{ .method = .GET, .path = "/api/items/42" };
+        defer req.deinit(testing.allocator);
+        var resp = try App.handler(testing.allocator, &req);
+        defer resp.deinit(testing.allocator);
+        try testing.expectEqual(StatusCode.ok, resp.status);
+        try testing.expectEqualStrings("42", resp.body.?);
+    }
+
+    // POST /api/items — create
+    {
+        var req: Request = .{ .method = .POST, .path = "/api/items" };
+        defer req.deinit(testing.allocator);
+        var resp = try App.handler(testing.allocator, &req);
+        defer resp.deinit(testing.allocator);
+        try testing.expectEqual(StatusCode.created, resp.status);
+    }
+
+    // DELETE /api/items/1 — not defined, should 405
+    {
+        var req: Request = .{ .method = .DELETE, .path = "/api/items/1" };
+        defer req.deinit(testing.allocator);
+        var resp = try App.handler(testing.allocator, &req);
+        defer resp.deinit(testing.allocator);
+        try testing.expectEqual(StatusCode.method_not_allowed, resp.status);
+    }
+}
+
+test "Router.resource combined with other routes" {
+    const testing = std.testing;
+
+    const Handlers = struct {
+        fn index(ctx: *Context) !void {
+            ctx.text(.ok, "posts-index");
+        }
+        fn show(ctx: *Context) !void {
+            ctx.text(.ok, "posts-show");
+        }
+        fn home(ctx: *Context) !void {
+            ctx.text(.ok, "home");
+        }
+    };
+
+    const App = Router.define(.{
+        .routes = Router.resource("/posts", .{
+            .index = Handlers.index,
+            .show = Handlers.show,
+        }) ++ &[_]RouteDef{
+            Router.get("/", Handlers.home),
+        },
+    });
+
+    // GET / — home
+    {
+        var req: Request = .{ .method = .GET, .path = "/" };
+        defer req.deinit(testing.allocator);
+        var resp = try App.handler(testing.allocator, &req);
+        defer resp.deinit(testing.allocator);
+        try testing.expectEqualStrings("home", resp.body.?);
+    }
+
+    // GET /posts — resource index
+    {
+        var req: Request = .{ .method = .GET, .path = "/posts" };
+        defer req.deinit(testing.allocator);
+        var resp = try App.handler(testing.allocator, &req);
+        defer resp.deinit(testing.allocator);
+        try testing.expectEqualStrings("posts-index", resp.body.?);
+    }
 }

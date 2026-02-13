@@ -134,7 +134,7 @@ fn readFile(allocator: std.mem.Allocator, comptime base_dir: []const u8, rel_pat
 }
 
 /// Check if a path contains ".." segments (directory traversal).
-fn containsDotDot(path: []const u8) bool {
+pub fn containsDotDot(path: []const u8) bool {
     var i: usize = 0;
     while (i < path.len) {
         if (i + 1 < path.len and path[i] == '.' and path[i + 1] == '.') {
@@ -149,7 +149,7 @@ fn containsDotDot(path: []const u8) bool {
 }
 
 /// Map a file extension to a MIME content type.
-fn mimeFromPath(path: []const u8) []const u8 {
+pub fn mimeFromPath(path: []const u8) []const u8 {
     const ext = std.fs.path.extension(path);
 
     // Text
