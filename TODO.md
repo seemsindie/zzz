@@ -49,16 +49,16 @@ zig build run -- --some-arg
 - [x] Request body reading (Content-Length based)
 - [x] Example app with 4 routes (`src/main.zig`)
 - [x] All tests passing (10/10)
-- [ ] Chunked transfer encoding (request reading)
-- [ ] Chunked transfer encoding (response streaming)
-- [ ] Keep-alive connection reuse (currently closes after each response)
-- [ ] Configurable request size limits
-- [ ] Configurable read/write timeouts
-- [ ] Graceful shutdown (signal handling)
-- [ ] Multi-threaded accept (worker thread pool)
-- [ ] Connection backpressure / max connections limit
-- [ ] HTTP/1.0 compatibility mode
-- [ ] 100-continue handling
+- [x] Chunked transfer encoding (request reading)
+- [x] Chunked transfer encoding (response streaming)
+- [x] Keep-alive connection reuse (currently closes after each response)
+- [x] Configurable request size limits
+- [x] Configurable read/write timeouts
+- [x] Graceful shutdown (signal handling)
+- [x] Multi-threaded accept (worker thread pool)
+- [x] Connection backpressure / max connections limit
+- [x] HTTP/1.0 compatibility mode
+- [x] 100-continue handling
 
 ## Phase 1.5: TLS / HTTPS
 
@@ -481,7 +481,7 @@ zig build run -- --some-arg
 
 | Phase | Status | Items Done | Items Remaining |
 |-------|--------|------------|-----------------|
-| 1. Foundation | **In Progress** | 14 | 10 |
+| 1. Foundation | **Complete** | 24 | 0 |
 | 1.5 TLS | Not Started | 0 | 8 |
 | 2. Router & Middleware | **Complete** | 45 | 0 |
 | 3. Templates & Views | Not Started | 0 | 42 |
@@ -491,4 +491,4 @@ zig build run -- --some-arg
 | 7. Swagger | Not Started | 0 | 18 |
 | 8. Testing & CLI | Not Started | 0 | 24 |
 | Cross-Cutting | Not Started | 0 | 16 |
-| **Total** | | **59** | **210** |
+| **Total** | | **69** | **200** |
