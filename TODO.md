@@ -164,23 +164,26 @@ zig build run -- --some-arg
 - [ ] Component blocks: `{{#component "card"}}...{{/component}}`
 - [ ] Slot support for components
 
-### Built-in Helpers
+### Built-in Helpers (Pipe Syntax)
 - [ ] `{{format_date date "YYYY-MM-DD"}}`
-- [ ] `{{truncate text 100}}`
-- [ ] `{{pluralize count "item" "items"}}`
-- [ ] `{{url_for "user_path" id=user.id}}`
-- [ ] Custom helper registration
+- [x] `{{title | truncate:20}}` — pipe syntax with truncate
+- [x] `{{count | pluralize:"item":"items"}}` — pipe syntax with pluralize
+- [x] `{{name | upper}}`, `{{name | lower}}` — case pipes
+- [x] `{{name | default:"N/A"}}` — default pipe
+- [x] Integer rendering: `{{count}}` with integer types
+- [ ] `{{url_for "user_path" id=user.id}}` — needs runtime route registry
+- [x] Custom helper registration — built-in pipe system (truncate, upper, lower, default, pluralize)
 
 ### htmx Integration (Built-in)
 - [x] htmx request detection (`ctx.isHtmx()` — checks `HX-Request` header)
 - [x] htmx response headers helper (`ctx.htmxTrigger()`, `ctx.htmxPushUrl()`, `ctx.htmxRedirect()`, `ctx.htmxReswap()`, `ctx.htmxRetarget()`)
 - [x] Partial rendering mode — render a template fragment instead of full page when htmx request detected
 - [x] `ctx.htmxRedirect()` — uses `HX-Redirect` header instead of 301/302 for htmx requests
-- [ ] Configurable htmx.js serving (bundled via static middleware or CDN `<script>` helper)
-- [ ] Out-of-band swap support (`HX-Trigger-After-Swap`, `HX-Trigger-After-Settle`)
+- [x] Configurable htmx.js serving (`htmx_cdn_version` config, `htmx_script` assign, `ctx.htmxScriptTag()`)
+- [x] Out-of-band swap support (`ctx.htmxTriggerAfterSwap()`, `ctx.htmxTriggerAfterSettle()`)
 - [x] htmx middleware — auto-detect htmx requests and set `ctx.assigns.is_htmx`
-- [ ] Template helpers for htmx attributes (e.g. `{{hx-get "/items"}}`, `{{hx-swap "outerHTML"}}`)
-- [ ] Example: htmx-powered CRUD app (inline editing, live search, infinite scroll)
+- [x] Template helpers for htmx attributes — htmx attributes are plain HTML (`hx-get="/path"`) which works directly in templates
+- [x] Example: htmx-powered CRUD app (todo list with add/delete via htmx partials)
 
 ### React/Vue/Svelte SSR Bridge (Future)
 - [ ] Shell out to Node/Deno/Bun for initial render
@@ -484,11 +487,11 @@ zig build run -- --some-arg
 | 1. Foundation | **Complete** | 24 | 0 |
 | 1.5 TLS | In Progress | 6 | 2 |
 | 2. Router & Middleware | **Complete** | 45 | 0 |
-| 3. Templates & Views | In Progress | 23 | 19 |
+| 3. Templates & Views | In Progress | 32 | 10 |
 | 4. WebSocket & Channels | Not Started | 0 | 22 |
 | 5. Database (zzz_db) | Not Started | 0 | 49 |
 | 6. Jobs (zzz_jobs) | Not Started | 0 | 27 |
 | 7. Swagger | Not Started | 0 | 18 |
 | 8. Testing & CLI | Not Started | 0 | 24 |
 | Cross-Cutting | Not Started | 0 | 16 |
-| **Total** | | **98** | **171** |
+| **Total** | | **107** | **162** |

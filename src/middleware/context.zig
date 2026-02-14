@@ -367,6 +367,21 @@ pub const Context = struct {
         self.response.headers.append(self.allocator, "HX-Retarget", selector) catch {};
     }
 
+    /// Set the HX-Trigger-After-Swap response header (trigger event after swap).
+    pub fn htmxTriggerAfterSwap(self: *Context, event: []const u8) void {
+        self.response.headers.append(self.allocator, "HX-Trigger-After-Swap", event) catch {};
+    }
+
+    /// Set the HX-Trigger-After-Settle response header (trigger event after settle).
+    pub fn htmxTriggerAfterSettle(self: *Context, event: []const u8) void {
+        self.response.headers.append(self.allocator, "HX-Trigger-After-Settle", event) catch {};
+    }
+
+    /// Get the htmx CDN script tag (set by htmx middleware).
+    pub fn htmxScriptTag(self: *const Context) []const u8 {
+        return self.getAssign("htmx_script") orelse "";
+    }
+
     // ── Partial / fragment rendering ──────────────────────────────────
 
     /// Render a template WITHOUT layout wrapping (for htmx fragment responses).
@@ -811,4 +826,55 @@ test "renderPartial renders without layout" {
     try std.testing.expectEqual(StatusCode.ok, ctx.response.status);
     try std.testing.expectEqualStrings("<span>5</span>", ctx.response.body.?);
     try std.testing.expectEqualStrings("text/html; charset=utf-8", ctx.response.headers.get("Content-Type").?);
+}
+
+test "htmxTriggerAfterSwap and htmxTriggerAfterSettle set headers" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var req: Request = .{};
+    defer req.deinit(alloc);
+
+    var ctx: Context = .{
+        .request = &req,
+        .response = .{},
+        .params = .{},
+        .query = .{},
+        .assigns = .{},
+        .allocator = alloc,
+        .next_handler = null,
+    };
+
+    ctx.htmxTriggerAfterSwap("itemAdded");
+    try std.testing.expectEqualStrings("itemAdded", ctx.response.headers.get("HX-Trigger-After-Swap").?);
+
+    ctx.htmxTriggerAfterSettle("formReset");
+    try std.testing.expectEqualStrings("formReset", ctx.response.headers.get("HX-Trigger-After-Settle").?);
+}
+
+test "htmxScriptTag returns assign value or empty" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var req: Request = .{};
+    defer req.deinit(alloc);
+
+    var ctx: Context = .{
+        .request = &req,
+        .response = .{},
+        .params = .{},
+        .query = .{},
+        .assigns = .{},
+        .allocator = alloc,
+        .next_handler = null,
+    };
+
+    // No htmx_script assign → empty
+    try std.testing.expectEqualStrings("", ctx.htmxScriptTag());
+
+    // Set it
+    ctx.assign("htmx_script", "<script src=\"htmx.js\"></script>");
+    try std.testing.expectEqualStrings("<script src=\"htmx.js\"></script>", ctx.htmxScriptTag());
 }

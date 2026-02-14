@@ -6,6 +6,8 @@ const HandlerFn = @import("context.zig").HandlerFn;
 pub const HtmxConfig = struct {
     /// Automatically set assigns for htmx request headers.
     set_assigns: bool = true,
+    /// htmx CDN version for the auto-generated script tag assign.
+    htmx_cdn_version: []const u8 = "2.0.4",
 };
 
 /// Create an htmx middleware that auto-detects htmx requests and sets assigns.
@@ -23,6 +25,7 @@ pub fn htmx(comptime config: HtmxConfig) HandlerFn {
                 if (ctx.request.header("HX-Target")) |t| ctx.assign("htmx_target", t);
                 if (ctx.request.header("HX-Trigger")) |t| ctx.assign("htmx_trigger", t);
             }
+            ctx.assign("htmx_script", "<script src=\"https://unpkg.com/htmx.org@" ++ config.htmx_cdn_version ++ "\" crossorigin=\"anonymous\"></script>");
             try ctx.next();
         }
     };
@@ -78,6 +81,52 @@ test "htmx middleware sets is_htmx assign to false for normal requests" {
 
     try std.testing.expectEqual(StatusCode.ok, resp.status);
     try std.testing.expectEqualStrings("false", resp.body.?);
+}
+
+test "htmx middleware sets htmx_script assign with CDN tag" {
+    const H = struct {
+        fn handle(ctx: *Context) !void {
+            const script = ctx.getAssign("htmx_script") orelse "missing";
+            ctx.text(.ok, script);
+        }
+    };
+    const App = Router.define(.{
+        .middleware = &.{htmx(.{})},
+        .routes = &.{Router.get("/test", H.handle)},
+    });
+
+    var req: Request = .{ .method = .GET, .path = "/test" };
+    defer req.deinit(std.testing.allocator);
+
+    var resp = try App.handler(std.testing.allocator, &req);
+    defer resp.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(StatusCode.ok, resp.status);
+    const body = resp.body.?;
+    try std.testing.expect(std.mem.indexOf(u8, body, "htmx.org@2.0.4") != null);
+    try std.testing.expect(std.mem.indexOf(u8, body, "<script") != null);
+}
+
+test "htmx middleware custom CDN version" {
+    const H = struct {
+        fn handle(ctx: *Context) !void {
+            const script = ctx.getAssign("htmx_script") orelse "missing";
+            ctx.text(.ok, script);
+        }
+    };
+    const App = Router.define(.{
+        .middleware = &.{htmx(.{ .htmx_cdn_version = "1.9.0" })},
+        .routes = &.{Router.get("/test", H.handle)},
+    });
+
+    var req: Request = .{ .method = .GET, .path = "/test" };
+    defer req.deinit(std.testing.allocator);
+
+    var resp = try App.handler(std.testing.allocator, &req);
+    defer resp.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(StatusCode.ok, resp.status);
+    try std.testing.expect(std.mem.indexOf(u8, resp.body.?, "htmx.org@1.9.0") != null);
 }
 
 test "htmx middleware sets htmx_target and htmx_trigger assigns" {

@@ -13,6 +13,19 @@ pub const Segment = union(enum) {
     with_block: WithBlock,
     raw_block: []const u8,
     yield: []const u8, // name: "" for default {{{yield}}}, "head" for {{{yield_head}}}, etc.
+    piped_variable: PipedVariable,
+
+    pub const Pipe = struct {
+        name: []const u8,
+        arg: []const u8, // "" if no arg
+        arg2: []const u8, // "" if no second arg (used by pluralize)
+    };
+
+    pub const PipedVariable = struct {
+        path: []const u8,
+        pipes: []const Pipe,
+        is_raw: bool,
+    };
 
     pub const Conditional = struct {
         condition: []const u8,
@@ -196,6 +209,10 @@ fn processTag(comptime source: []const u8, comptime tag: TagInfo) TagResult {
             if (startsWith(content, "yield_")) {
                 return .{ .segment = .{ .yield = content[6..] }, .next_pos = tag.end };
             }
+            // Check for pipe syntax: {{{name | upper}}}
+            if (indexOf(content, "|", 0)) |_| {
+                return .{ .segment = .{ .piped_variable = parsePipedVariable(content, true) }, .next_pos = tag.end };
+            }
             return .{ .segment = .{ .raw_variable = content }, .next_pos = tag.end };
         }
 
@@ -294,7 +311,10 @@ fn processTag(comptime source: []const u8, comptime tag: TagInfo) TagResult {
             @compileError("Unknown block tag: {{#" ++ rest ++ "}}");
         }
 
-        // Variable: {{name}}
+        // Variable: {{name}} or piped: {{name | upper}}
+        if (indexOf(content, "|", 0)) |_| {
+            return .{ .segment = .{ .piped_variable = parsePipedVariable(content, false) }, .next_pos = tag.end };
+        }
         return .{ .segment = .{ .variable = content }, .next_pos = tag.end };
     }
 }
@@ -400,6 +420,75 @@ fn trim(comptime s: []const u8) []const u8 {
         end -= 1;
     }
     return s[start..end];
+}
+
+/// Parse a piped variable expression like "name | upper | truncate:20" at comptime.
+fn parsePipedVariable(comptime content: []const u8, comptime is_raw: bool) Segment.PipedVariable {
+    comptime {
+        // Split on first '|' → field path + pipe chain
+        const pipe_pos = indexOf(content, "|", 0).?;
+        const path = trim(content[0..pipe_pos]);
+        const pipe_str = trim(content[pipe_pos + 1 ..]);
+
+        // Count pipes (split on '|')
+        const pipe_count = countChar(pipe_str, '|') + 1;
+        var pipes: [pipe_count]Segment.Pipe = undefined;
+        var pi: usize = 0;
+        var rest: []const u8 = pipe_str;
+
+        while (rest.len > 0) {
+            const next_pipe = indexOf(rest, "|", 0);
+            const this_pipe = if (next_pipe) |np| trim(rest[0..np]) else trim(rest);
+            rest = if (next_pipe) |np| rest[np + 1 ..] else "";
+
+            // Parse name:arg or name:"arg1":"arg2" or just name
+            const colon_pos = indexOf(this_pipe, ":", 0);
+            if (colon_pos) |cp| {
+                const name = trim(this_pipe[0..cp]);
+                const args_part = this_pipe[cp + 1 ..];
+                // Check for quoted args: "arg1":"arg2"
+                if (args_part.len > 0 and args_part[0] == '"') {
+                    // Parse first quoted arg
+                    const first_end = indexOf(args_part, "\"", 1) orelse
+                        @compileError("Unclosed quote in pipe arg: " ++ this_pipe);
+                    const first_arg = args_part[1..first_end];
+                    // Check for second quoted arg after ":"
+                    const after_first = args_part[first_end + 1 ..];
+                    if (after_first.len > 0 and after_first[0] == ':' and after_first.len > 1 and after_first[1] == '"') {
+                        const second_end = indexOf(after_first, "\"", 2) orelse
+                            @compileError("Unclosed quote in pipe second arg: " ++ this_pipe);
+                        const second_arg = after_first[2..second_end];
+                        pipes[pi] = .{ .name = name, .arg = first_arg, .arg2 = second_arg };
+                    } else {
+                        pipes[pi] = .{ .name = name, .arg = first_arg, .arg2 = "" };
+                    }
+                } else {
+                    pipes[pi] = .{ .name = name, .arg = trim(args_part), .arg2 = "" };
+                }
+            } else {
+                pipes[pi] = .{ .name = this_pipe, .arg = "", .arg2 = "" };
+            }
+            pi += 1;
+        }
+
+        const final = pipes;
+        return .{
+            .path = path,
+            .pipes = &final,
+            .is_raw = is_raw,
+        };
+    }
+}
+
+/// Count occurrences of a character in a comptime string.
+fn countChar(comptime s: []const u8, comptime ch: u8) usize {
+    comptime {
+        var count: usize = 0;
+        for (s) |c| {
+            if (c == ch) count += 1;
+        }
+        return count;
+    }
 }
 
 // ── Public API ─────────────────────────────────────────────────────────
@@ -692,12 +781,12 @@ fn renderSegments(comptime segments: []const Segment, data: anytype, buf: *std.A
             },
             .variable => |path| {
                 const value = resolveField(data, path);
-                const str = coerceToString(value);
+                const str = try renderValue(value, allocator);
                 try html_escape.appendEscaped(buf, allocator, str);
             },
             .raw_variable => |path| {
                 const value = resolveField(data, path);
-                const str = coerceToString(value);
+                const str = try renderValue(value, allocator);
                 try buf.appendSlice(allocator, str);
             },
             .conditional => |cond| {
@@ -721,6 +810,19 @@ fn renderSegments(comptime segments: []const Segment, data: anytype, buf: *std.A
             },
             .raw_block => |text| {
                 try buf.appendSlice(allocator, text);
+            },
+            .piped_variable => |pv| {
+                const value = resolveField(data, pv.path);
+                var str = try renderValue(value, allocator);
+                // Apply each pipe in sequence
+                inline for (pv.pipes) |pipe| {
+                    str = try applyPipe(allocator, str, pipe);
+                }
+                if (pv.is_raw) {
+                    try buf.appendSlice(allocator, str);
+                } else {
+                    try html_escape.appendEscaped(buf, allocator, str);
+                }
             },
             .yield => |name| {
                 if (name.len == 0) {
@@ -832,6 +934,7 @@ fn ResolveSliceReturn(comptime T: type) type {
 }
 
 /// Coerce a value to a string for output.
+/// Supports []const u8, *const [N]u8, and integer types.
 inline fn coerceToString(value: anytype) []const u8 {
     const T = @TypeOf(value);
     if (T == []const u8) return value;
@@ -845,7 +948,96 @@ inline fn coerceToString(value: anytype) []const u8 {
         }
     }
 
+    if (info == .int or info == .comptime_int) {
+        // For integer types, use a sentinel approach — this is handled at
+        // runtime via the valueToIntStr path. We should not reach here for ints
+        // when using the piped path, but for plain {{var}} we need the runtime path.
+        @compileError("Integer template variables require pipe syntax or use valueToIntStr; got " ++ @typeName(T));
+    }
+
     @compileError("Template variable must be []const u8, got " ++ @typeName(T));
+}
+
+/// Check at comptime whether a type is a string-like type.
+fn isStringType(comptime T: type) bool {
+    if (T == []const u8) return true;
+    if (T == []u8) return true;
+    const info = @typeInfo(T);
+    if (info == .pointer and info.pointer.size == .one) {
+        const child = @typeInfo(info.pointer.child);
+        if (child == .array and child.array.child == u8) return true;
+    }
+    return false;
+}
+
+/// Check at comptime whether a type is an integer type.
+fn isIntType(comptime T: type) bool {
+    const info = @typeInfo(T);
+    return info == .int or info == .comptime_int;
+}
+
+/// Render a value to a string, supporting both string and integer types.
+/// For integers, allocates a formatted string via the allocator.
+/// Returns the string representation.
+inline fn renderValue(value: anytype, allocator: Allocator) ![]const u8 {
+    const T = @TypeOf(value);
+    if (comptime isStringType(T)) {
+        return coerceToString(value);
+    }
+    if (comptime isIntType(T)) {
+        return std.fmt.allocPrint(allocator, "{d}", .{value});
+    }
+    @compileError("Template variable must be []const u8 or integer, got " ++ @typeName(T));
+}
+
+/// Apply a single pipe transformation to the input string at runtime.
+fn applyPipe(allocator: Allocator, input: []const u8, comptime pipe: Segment.Pipe) ![]const u8 {
+    if (comptime eql(pipe.name, "truncate")) {
+        const n = comptime std.fmt.parseInt(usize, pipe.arg, 10) catch
+            @compileError("truncate pipe requires a numeric argument, got: " ++ pipe.arg);
+        if (input.len > n) {
+            const result = try allocator.alloc(u8, n + 3);
+            @memcpy(result[0..n], input[0..n]);
+            @memcpy(result[n..][0..3], "...");
+            return result;
+        }
+        return input;
+    }
+
+    if (comptime eql(pipe.name, "upper")) {
+        const result = try allocator.alloc(u8, input.len);
+        for (input, 0..) |c, i| {
+            result[i] = if (c >= 'a' and c <= 'z') c - 32 else c;
+        }
+        return result;
+    }
+
+    if (comptime eql(pipe.name, "lower")) {
+        const result = try allocator.alloc(u8, input.len);
+        for (input, 0..) |c, i| {
+            result[i] = if (c >= 'A' and c <= 'Z') c + 32 else c;
+        }
+        return result;
+    }
+
+    if (comptime eql(pipe.name, "default")) {
+        if (input.len == 0) {
+            return pipe.arg;
+        }
+        return input;
+    }
+
+    if (comptime eql(pipe.name, "pluralize")) {
+        const singular = pipe.arg;
+        const plural = pipe.arg2;
+        // Parse input as integer count
+        const count = std.fmt.parseInt(i64, input, 10) catch 0;
+        const word = if (count == 1) singular else plural;
+        return std.fmt.allocPrint(allocator, "{d} {s}", .{ count, word });
+    }
+
+    // Unknown pipe — passthrough
+    return input;
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────
@@ -1116,4 +1308,144 @@ test "backward compatibility: existing render still works" {
     const result2 = try Layout.renderWithYield(std.testing.allocator, .{}, "inner");
     defer std.testing.allocator.free(result2);
     try std.testing.expectEqualStrings("<div>inner</div>", result2);
+}
+
+test "pipe: truncate" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const T = template("{{title | truncate:5}}");
+    const result = try T.render(alloc, .{ .title = "Hello World" });
+    try std.testing.expectEqualStrings("Hello...", result);
+}
+
+test "pipe: truncate no-op when short enough" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const T = template("{{title | truncate:20}}");
+    const result = try T.render(alloc, .{ .title = "Hello" });
+    try std.testing.expectEqualStrings("Hello", result);
+}
+
+test "pipe: upper" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const T = template("{{name | upper}}");
+    const result = try T.render(alloc, .{ .name = "hello" });
+    try std.testing.expectEqualStrings("HELLO", result);
+}
+
+test "pipe: lower" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const T = template("{{name | lower}}");
+    const result = try T.render(alloc, .{ .name = "HELLO" });
+    try std.testing.expectEqualStrings("hello", result);
+}
+
+test "pipe: default on empty" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const T = template("{{name | default:\"N/A\"}}");
+    const result = try T.render(alloc, .{ .name = "" });
+    try std.testing.expectEqualStrings("N/A", result);
+}
+
+test "pipe: default on non-empty" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const T = template("{{name | default:\"N/A\"}}");
+    const result = try T.render(alloc, .{ .name = "Alice" });
+    try std.testing.expectEqualStrings("Alice", result);
+}
+
+test "pipe: chaining upper then truncate" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const T = template("{{val | upper | truncate:3}}");
+    const result = try T.render(alloc, .{ .val = "hello" });
+    try std.testing.expectEqualStrings("HEL...", result);
+}
+
+test "integer rendering" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const T = template("Count: {{count}}");
+    const result = try T.render(alloc, .{ .count = @as(u32, 42) });
+    try std.testing.expectEqualStrings("Count: 42", result);
+}
+
+test "integer rendering with raw variable" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const T = template("Count: {{{count}}}");
+    const result = try T.render(alloc, .{ .count = @as(i32, -7) });
+    try std.testing.expectEqualStrings("Count: -7", result);
+}
+
+test "pipe: pluralize singular" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const T = template("{{count | pluralize:\"item\":\"items\"}}");
+    const result = try T.render(alloc, .{ .count = "1" });
+    try std.testing.expectEqualStrings("1 item", result);
+}
+
+test "pipe: pluralize plural" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const T = template("{{count | pluralize:\"item\":\"items\"}}");
+    const result = try T.render(alloc, .{ .count = "3" });
+    try std.testing.expectEqualStrings("3 items", result);
+}
+
+test "pipe: pluralize with integer" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const T = template("{{count | pluralize:\"item\":\"items\"}}");
+    const result = try T.render(alloc, .{ .count = @as(u32, 1) });
+    try std.testing.expectEqualStrings("1 item", result);
+}
+
+test "pipe: raw variable with pipe" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const T = template("{{{name | upper}}}");
+    const result = try T.render(alloc, .{ .name = "hello" });
+    try std.testing.expectEqualStrings("HELLO", result);
+}
+
+test "pipe: HTML escaping with escaped variable" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const T = template("{{name | upper}}");
+    const result = try T.render(alloc, .{ .name = "<b>" });
+    try std.testing.expectEqualStrings("&lt;B&gt;", result);
 }
