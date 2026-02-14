@@ -69,6 +69,9 @@ pub const JwtConfig = @import("middleware/auth.zig").JwtConfig;
 // Resource Helper (re-exported from Router)
 pub const ResourceHandlers = Router.ResourceHandlers;
 
+// Template Engine
+pub const template = @import("template/engine.zig").template;
+
 // Cookie helpers (re-exported from Context)
 pub const CookieOptions = Context.CookieOptions;
 

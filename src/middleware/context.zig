@@ -302,6 +302,17 @@ pub const Context = struct {
         return null;
     }
 
+    /// Render a comptime-parsed template with data and send as HTML response.
+    /// The template type must have a `render(allocator, data) ![]const u8` method,
+    /// as returned by `zzz.template()`.
+    pub fn render(self: *Context, comptime Tmpl: type, status: StatusCode, data: anytype) !void {
+        const body = try Tmpl.render(self.allocator, data);
+        self.response.status = status;
+        self.response.body = body;
+        self.response.body_owned = true;
+        self.response.headers.append(self.allocator, "Content-Type", "text/html; charset=utf-8") catch {};
+    }
+
     /// Send a file as the response body. Reads from CWD.
     /// If `content_type` is null, auto-detects from file extension.
     pub fn sendFile(self: *Context, file_path: []const u8, content_type: ?[]const u8) void {

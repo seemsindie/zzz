@@ -135,21 +135,21 @@ zig build run -- --some-arg
 ## Phase 3: Template Engine & View Layer
 
 ### Core Engine
-- [ ] Template file format (.zzz or .html.zzz extension)
-- [ ] Template lexer (tokenize template syntax)
-- [ ] Template AST parser
-- [ ] Comptime template compilation (templates -> Zig render functions)
-- [ ] Build.zig integration (compile templates during build)
-- [ ] Auto HTML escaping (XSS protection by default)
-- [ ] Triple-brace {{{ }}} for raw/unescaped output
+- [x] Template file format (.zzz or .html.zzz extension)
+- [x] Template lexer (tokenize template syntax)
+- [x] Template AST parser
+- [x] Comptime template compilation (templates -> Zig render functions)
+- [x] Build.zig integration (compile templates during build)
+- [x] Auto HTML escaping (XSS protection by default)
+- [x] Triple-brace {{{ }}} for raw/unescaped output
 
 ### Template Syntax
-- [ ] Variable interpolation: `{{name}}`
-- [ ] Dot notation: `{{user.name}}`
-- [ ] Conditionals: `{{#if}}` / `{{else}}` / `{{/if}}`
-- [ ] Iteration: `{{#each items as |item|}}` / `{{/each}}`
+- [x] Variable interpolation: `{{name}}`
+- [x] Dot notation: `{{user.name}}`
+- [x] Conditionals: `{{#if}}` / `{{else}}` / `{{/if}}`
+- [x] Iteration: `{{#each items as |item|}}` / `{{/each}}`
 - [ ] With blocks: `{{#with user}}` / `{{/with}}`
-- [ ] Comments: `{{! this is a comment }}`
+- [x] Comments: `{{! this is a comment }}`
 - [ ] Raw blocks: `{{{{raw}}}}` (no processing)
 
 ### Layout System
@@ -484,11 +484,11 @@ zig build run -- --some-arg
 | 1. Foundation | **Complete** | 24 | 0 |
 | 1.5 TLS | In Progress | 6 | 2 |
 | 2. Router & Middleware | **Complete** | 45 | 0 |
-| 3. Templates & Views | Not Started | 0 | 42 |
+| 3. Templates & Views | In Progress | 13 | 29 |
 | 4. WebSocket & Channels | Not Started | 0 | 22 |
 | 5. Database (zzz_db) | Not Started | 0 | 49 |
 | 6. Jobs (zzz_jobs) | Not Started | 0 | 27 |
 | 7. Swagger | Not Started | 0 | 18 |
 | 8. Testing & CLI | Not Started | 0 | 24 |
 | Cross-Cutting | Not Started | 0 | 16 |
-| **Total** | | **75** | **194** |
+| **Total** | | **88** | **181** |
