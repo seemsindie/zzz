@@ -148,18 +148,18 @@ zig build run -- --some-arg
 - [x] Dot notation: `{{user.name}}`
 - [x] Conditionals: `{{#if}}` / `{{else}}` / `{{/if}}`
 - [x] Iteration: `{{#each items as |item|}}` / `{{/each}}`
-- [ ] With blocks: `{{#with user}}` / `{{/with}}`
+- [x] With blocks: `{{#with user}}` / `{{/with}}`
 - [x] Comments: `{{! this is a comment }}`
-- [ ] Raw blocks: `{{{{raw}}}}` (no processing)
+- [x] Raw blocks: `{{{{raw}}}}` (no processing)
 
 ### Layout System
-- [ ] Layout templates with `{{yield}}` blocks
+- [x] Layout templates with `{{yield}}` blocks
 - [ ] Nested layouts
 - [ ] Named yield blocks (header, footer, sidebar)
 - [ ] Layout selection per controller/action
 
 ### Partials & Components
-- [ ] Partial inclusion: `{{> partials/header}}`
+- [x] Partial inclusion: `{{> partials/header}}`
 - [ ] Partial with arguments: `{{> button type="primary"}}`
 - [ ] Component blocks: `{{#component "card"}}...{{/component}}`
 - [ ] Slot support for components
@@ -484,11 +484,11 @@ zig build run -- --some-arg
 | 1. Foundation | **Complete** | 24 | 0 |
 | 1.5 TLS | In Progress | 6 | 2 |
 | 2. Router & Middleware | **Complete** | 45 | 0 |
-| 3. Templates & Views | In Progress | 13 | 29 |
+| 3. Templates & Views | In Progress | 17 | 25 |
 | 4. WebSocket & Channels | Not Started | 0 | 22 |
 | 5. Database (zzz_db) | Not Started | 0 | 49 |
 | 6. Jobs (zzz_jobs) | Not Started | 0 | 27 |
 | 7. Swagger | Not Started | 0 | 18 |
 | 8. Testing & CLI | Not Started | 0 | 24 |
 | Cross-Cutting | Not Started | 0 | 16 |
-| **Total** | | **88** | **181** |
+| **Total** | | **92** | **177** |

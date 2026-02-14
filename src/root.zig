@@ -71,6 +71,7 @@ pub const ResourceHandlers = Router.ResourceHandlers;
 
 // Template Engine
 pub const template = @import("template/engine.zig").template;
+pub const templateWithPartials = @import("template/engine.zig").templateWithPartials;
 
 // Cookie helpers (re-exported from Context)
 pub const CookieOptions = Context.CookieOptions;

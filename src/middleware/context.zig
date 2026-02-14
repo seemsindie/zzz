@@ -313,6 +313,25 @@ pub const Context = struct {
         self.response.headers.append(self.allocator, "Content-Type", "text/html; charset=utf-8") catch {};
     }
 
+    /// Render a content template wrapped in a layout template.
+    /// Both templates receive the same `data` struct. The layout's `{{{yield}}}`
+    /// placeholder is replaced with the rendered content.
+    pub fn renderWithLayout(
+        self: *Context,
+        comptime LayoutTmpl: type,
+        comptime ContentTmpl: type,
+        status: StatusCode,
+        data: anytype,
+    ) !void {
+        const content = try ContentTmpl.render(self.allocator, data);
+        defer self.allocator.free(content);
+        const body = try LayoutTmpl.renderWithYield(self.allocator, data, content);
+        self.response.status = status;
+        self.response.body = body;
+        self.response.body_owned = true;
+        self.response.headers.append(self.allocator, "Content-Type", "text/html; charset=utf-8") catch {};
+    }
+
     /// Send a file as the response body. Reads from CWD.
     /// If `content_type` is null, auto-detects from file extension.
     pub fn sendFile(self: *Context, file_path: []const u8, content_type: ?[]const u8) void {

@@ -10,6 +10,9 @@ pub const Segment = union(enum) {
     conditional: Conditional,
     loop: Loop,
     comment: void,
+    with_block: WithBlock,
+    raw_block: []const u8,
+    yield: void,
 
     pub const Conditional = struct {
         condition: []const u8,
@@ -19,6 +22,11 @@ pub const Segment = union(enum) {
 
     pub const Loop = struct {
         collection: []const u8,
+        body: []const Segment,
+    };
+
+    pub const WithBlock = struct {
+        binding: []const u8,
         body: []const Segment,
     };
 };
@@ -105,6 +113,7 @@ const TagInfo = struct {
     content: []const u8, // trimmed content between delimiters
     end: usize, // position after last '}'
     is_raw: bool, // triple-brace {{{...}}}
+    is_raw_block: bool, // quad-brace {{{{raw}}}} block
 };
 
 /// Find the next template tag starting from `pos`.
@@ -113,6 +122,27 @@ fn findTag(comptime source: []const u8, comptime pos: usize) ?TagInfo {
         var i = pos;
         while (i + 1 < source.len) : (i += 1) {
             if (source[i] == '{' and source[i + 1] == '{') {
+                // Quad brace? {{{{raw}}}} block
+                if (i + 3 < source.len and source[i + 2] == '{' and source[i + 3] == '{') {
+                    // Expect {{{{raw}}}} opening
+                    const open_end = indexOf(source, "}}}}", i + 4) orelse
+                        @compileError("Unclosed quad-brace opening tag");
+                    const tag_name = trim(source[i + 4 .. open_end]);
+                    if (!eql(tag_name, "raw")) {
+                        @compileError("Only {{{{raw}}}} is supported, got {{{{" ++ tag_name ++ "}}}}");
+                    }
+                    const content_start = open_end + 4;
+                    // Find {{{{/raw}}}}
+                    const close = indexOf(source, "{{{{/raw}}}}", content_start) orelse
+                        @compileError("Unclosed {{{{raw}}}} block — missing {{{{/raw}}}}");
+                    return .{
+                        .start = i,
+                        .content = source[content_start..close],
+                        .end = close + "{{{{/raw}}}}".len,
+                        .is_raw = false,
+                        .is_raw_block = true,
+                    };
+                }
                 // Triple brace?
                 if (i + 2 < source.len and source[i + 2] == '{') {
                     // Find closing }}}
@@ -123,6 +153,7 @@ fn findTag(comptime source: []const u8, comptime pos: usize) ?TagInfo {
                         .content = trim(source[i + 3 .. close]),
                         .end = close + 3,
                         .is_raw = true,
+                        .is_raw_block = false,
                     };
                 }
                 // Double brace
@@ -133,6 +164,7 @@ fn findTag(comptime source: []const u8, comptime pos: usize) ?TagInfo {
                     .content = trim(source[i + 2 .. close]),
                     .end = close + 2,
                     .is_raw = false,
+                    .is_raw_block = false,
                 };
             }
         }
@@ -151,8 +183,16 @@ fn processTag(comptime source: []const u8, comptime tag: TagInfo) TagResult {
     comptime {
         const content = tag.content;
 
-        // Raw variable: {{{name}}}
+        // Raw block: {{{{raw}}}}...{{{{/raw}}}}
+        if (tag.is_raw_block) {
+            return .{ .segment = .{ .raw_block = content }, .next_pos = tag.end };
+        }
+
+        // Raw variable: {{{name}}} — check for yield
         if (tag.is_raw) {
+            if (eql(content, "yield")) {
+                return .{ .segment = .{ .yield = {} }, .next_pos = tag.end };
+            }
             return .{ .segment = .{ .raw_variable = content }, .next_pos = tag.end };
         }
 
@@ -161,7 +201,13 @@ fn processTag(comptime source: []const u8, comptime tag: TagInfo) TagResult {
             return .{ .segment = .{ .comment = {} }, .next_pos = tag.end };
         }
 
-        // Block tags: {{#if ...}}, {{#each ...}}
+        // Partial inclusion: {{> name}} — should be pre-processed
+        if (content.len > 0 and content[0] == '>') {
+            const partial_name = trim(content[1..]);
+            @compileError("Unresolved partial: {{> " ++ partial_name ++ "}} — use templateWithPartials() to inline partials before parsing");
+        }
+
+        // Block tags: {{#if ...}}, {{#each ...}}, {{#with ...}}
         if (content.len > 1 and content[0] == '#') {
             const rest = trim(content[1..]);
 
@@ -224,6 +270,24 @@ fn processTag(comptime source: []const u8, comptime tag: TagInfo) TagResult {
                 };
             }
 
+            if (startsWith(rest, "with ")) {
+                const binding = trim(rest[5..]);
+                const end_marker_str = "{{/with}}";
+
+                const after_tag = source[tag.end..];
+                const end_pos = indexOf(after_tag, end_marker_str, 0) orelse
+                    @compileError("Unclosed {{#with}} block — missing {{/with}}");
+
+                const body_result = parseInner(after_tag[0..end_pos], null);
+                return .{
+                    .segment = .{ .with_block = .{
+                        .binding = binding,
+                        .body = body_result.segments,
+                    } },
+                    .next_pos = tag.end + end_pos + end_marker_str.len,
+                };
+            }
+
             @compileError("Unknown block tag: {{#" ++ rest ++ "}}");
         }
 
@@ -255,7 +319,7 @@ fn countSegments(comptime source: []const u8, comptime end_marker: ?[]const u8) 
 
                 // For block tags, skip past the closing tag
                 const content = tag.content;
-                if (!tag.is_raw and content.len > 1 and content[0] == '#') {
+                if (!tag.is_raw and !tag.is_raw_block and content.len > 1 and content[0] == '#') {
                     const rest = trim(content[1..]);
                     if (startsWith(rest, "if ")) {
                         const after_tag = source[tag.end..];
@@ -267,6 +331,11 @@ fn countSegments(comptime source: []const u8, comptime end_marker: ?[]const u8) 
                         const end_pos = indexOf(after_tag, "{{/each}}", 0) orelse
                             @compileError("Unclosed {{#each}} block");
                         pos = tag.end + end_pos + "{{/each}}".len;
+                    } else if (startsWith(rest, "with ")) {
+                        const after_tag = source[tag.end..];
+                        const end_pos = indexOf(after_tag, "{{/with}}", 0) orelse
+                            @compileError("Unclosed {{#with}} block");
+                        pos = tag.end + end_pos + "{{/with}}".len;
                     } else {
                         @compileError("Unknown block tag");
                     }
@@ -332,6 +401,25 @@ fn trim(comptime s: []const u8) []const u8 {
 
 // ── Public API ─────────────────────────────────────────────────────────
 
+/// Internal: generate a template type from pre-parsed segments.
+fn makeTemplateType(comptime segments: []const Segment) type {
+    return struct {
+        pub fn render(allocator: Allocator, data: anytype) ![]const u8 {
+            var buf: std.ArrayList(u8) = .empty;
+            errdefer buf.deinit(allocator);
+            try renderSegments(segments, data, &buf, allocator, null);
+            return buf.toOwnedSlice(allocator);
+        }
+
+        pub fn renderWithYield(allocator: Allocator, data: anytype, yield_content: []const u8) ![]const u8 {
+            var buf: std.ArrayList(u8) = .empty;
+            errdefer buf.deinit(allocator);
+            try renderSegments(segments, data, &buf, allocator, yield_content);
+            return buf.toOwnedSlice(allocator);
+        }
+    };
+}
+
 /// Compile a template at comptime and return a type with a `render` method.
 ///
 /// Usage:
@@ -343,19 +431,98 @@ fn trim(comptime s: []const u8) []const u8 {
 /// }
 /// ```
 pub fn template(comptime source: []const u8) type {
-    const segments = comptime parse(source);
-    return struct {
-        pub fn render(allocator: Allocator, data: anytype) ![]const u8 {
-            var buf: std.ArrayList(u8) = .empty;
-            errdefer buf.deinit(allocator);
-            try renderSegments(segments, data, &buf, allocator);
-            return buf.toOwnedSlice(allocator);
+    return makeTemplateType(comptime parse(source));
+}
+
+/// Compile a template with partials inlined at comptime.
+///
+/// Usage:
+/// ```
+/// const Page = zzz.templateWithPartials(
+///     @embedFile("templates/page.html.zzz"),
+///     .{
+///         .header = @embedFile("templates/partials/header.html.zzz"),
+///         .footer = @embedFile("templates/partials/footer.html.zzz"),
+///     },
+/// );
+/// ```
+pub fn templateWithPartials(comptime source: []const u8, comptime partials: anytype) type {
+    const processed = comptime preprocessPartials(source, partials);
+    return makeTemplateType(comptime parse(processed));
+}
+
+/// Pre-process partial inclusions by replacing `{{> name}}` with the partial's source.
+fn preprocessPartials(comptime source: []const u8, comptime partials: anytype) []const u8 {
+    comptime {
+        @setEvalBranchQuota(100_000);
+
+        const partial_tag_open = "{{>";
+        const partial_tag_close = "}}";
+
+        // Pass 1: compute total output length
+        var total_len: usize = 0;
+        var scan_pos: usize = 0;
+
+        while (scan_pos < source.len) {
+            if (indexOf(source, partial_tag_open, scan_pos)) |tag_start| {
+                // Add literal before this tag
+                total_len += tag_start - scan_pos;
+
+                const content_start = tag_start + partial_tag_open.len;
+                const tag_end_offset = indexOf(source, partial_tag_close, content_start) orelse
+                    @compileError("Unclosed partial tag {{> ...");
+                const name = trim(source[content_start..tag_end_offset]);
+
+                // Look up partial source
+                const partial_source = @field(partials, name);
+                total_len += partial_source.len;
+
+                scan_pos = tag_end_offset + partial_tag_close.len;
+            } else {
+                total_len += source.len - scan_pos;
+                break;
+            }
         }
-    };
+
+        // Pass 2: build output
+        var result: [total_len]u8 = undefined;
+        var out_pos: usize = 0;
+        scan_pos = 0;
+
+        while (scan_pos < source.len) {
+            if (indexOf(source, partial_tag_open, scan_pos)) |tag_start| {
+                // Copy literal before this tag
+                const lit_len = tag_start - scan_pos;
+                if (lit_len > 0) {
+                    @memcpy(result[out_pos..][0..lit_len], source[scan_pos..tag_start]);
+                    out_pos += lit_len;
+                }
+
+                const content_start = tag_start + partial_tag_open.len;
+                const tag_end_offset = indexOf(source, partial_tag_close, content_start).?;
+                const name = trim(source[content_start..tag_end_offset]);
+
+                // Copy partial source
+                const partial_source = @field(partials, name);
+                @memcpy(result[out_pos..][0..partial_source.len], partial_source);
+                out_pos += partial_source.len;
+
+                scan_pos = tag_end_offset + partial_tag_close.len;
+            } else {
+                const remaining = source.len - scan_pos;
+                @memcpy(result[out_pos..][0..remaining], source[scan_pos..]);
+                out_pos += remaining;
+                break;
+            }
+        }
+
+        const final = result;
+        return &final;
+    }
 }
 
 /// Walk the comptime segment tree at runtime, rendering into a buffer.
-fn renderSegments(comptime segments: []const Segment, data: anytype, buf: *std.ArrayList(u8), allocator: Allocator) !void {
+fn renderSegments(comptime segments: []const Segment, data: anytype, buf: *std.ArrayList(u8), allocator: Allocator, yield_content: ?[]const u8) !void {
     inline for (segments) |seg| {
         switch (seg) {
             .literal => |text| {
@@ -374,18 +541,30 @@ fn renderSegments(comptime segments: []const Segment, data: anytype, buf: *std.A
             .conditional => |cond| {
                 const truthy = resolveBool(data, cond.condition);
                 if (truthy) {
-                    try renderSegments(cond.then_body, data, buf, allocator);
+                    try renderSegments(cond.then_body, data, buf, allocator, yield_content);
                 } else {
-                    try renderSegments(cond.else_body, data, buf, allocator);
+                    try renderSegments(cond.else_body, data, buf, allocator, yield_content);
                 }
             },
             .loop => |lp| {
                 const slice = resolveSlice(data, lp.collection);
                 for (slice) |item| {
-                    try renderSegments(lp.body, item, buf, allocator);
+                    try renderSegments(lp.body, item, buf, allocator, yield_content);
                 }
             },
             .comment => {},
+            .with_block => |wb| {
+                const scoped_data = resolveField(data, wb.binding);
+                try renderSegments(wb.body, scoped_data, buf, allocator, yield_content);
+            },
+            .raw_block => |text| {
+                try buf.appendSlice(allocator, text);
+            },
+            .yield => {
+                if (yield_content) |yc| {
+                    try buf.appendSlice(allocator, yc);
+                }
+            },
         }
     }
 }
@@ -626,4 +805,67 @@ test "full template" {
     try std.testing.expect(std.mem.indexOf(u8, result, "Hello, World!") != null);
     try std.testing.expect(std.mem.indexOf(u8, result, "/about") != null);
     try std.testing.expect(std.mem.indexOf(u8, result, "API") != null);
+}
+
+test "with block basic usage" {
+    const T = template("{{#with user}}{{name}} — {{email}}{{/with}}");
+    const result = try T.render(std.testing.allocator, .{
+        .user = .{ .name = "Alice", .email = "alice@example.com" },
+    });
+    defer std.testing.allocator.free(result);
+    try std.testing.expectEqualStrings("Alice — alice@example.com", result);
+}
+
+test "with block dot path" {
+    const T = template("{{#with profile.address}}{{city}}{{/with}}");
+    const result = try T.render(std.testing.allocator, .{
+        .profile = .{ .address = .{ .city = "Portland" } },
+    });
+    defer std.testing.allocator.free(result);
+    try std.testing.expectEqualStrings("Portland", result);
+}
+
+test "raw block passthrough" {
+    const T = template("before{{{{raw}}}}This {{will not}} be processed: {{{nor this}}}{{{{/raw}}}}after");
+    const result = try T.render(std.testing.allocator, .{});
+    defer std.testing.allocator.free(result);
+    try std.testing.expectEqualStrings("beforeThis {{will not}} be processed: {{{nor this}}}after", result);
+}
+
+test "yield renders empty when no yield_content" {
+    const T = template("before{{{yield}}}after");
+    const result = try T.render(std.testing.allocator, .{});
+    defer std.testing.allocator.free(result);
+    try std.testing.expectEqualStrings("beforeafter", result);
+}
+
+test "renderWithYield injects content" {
+    const T = template("<main>{{{yield}}}</main>");
+    const result = try T.renderWithYield(std.testing.allocator, .{}, "<p>Hello</p>");
+    defer std.testing.allocator.free(result);
+    try std.testing.expectEqualStrings("<main><p>Hello</p></main>", result);
+}
+
+test "templateWithPartials inlines partials" {
+    const T = templateWithPartials("{{> header}}<main>{{content}}</main>{{> footer}}", .{
+        .header = "<header>Nav</header>",
+        .footer = "<footer>End</footer>",
+    });
+    const result = try T.render(std.testing.allocator, .{ .content = "Hello" });
+    defer std.testing.allocator.free(result);
+    try std.testing.expectEqualStrings("<header>Nav</header><main>Hello</main><footer>End</footer>", result);
+}
+
+test "layout and content two-step rendering" {
+    const Layout = template("<html><body>{{{yield}}}</body></html>");
+    const Content = template("<h1>{{title}}</h1>");
+
+    // Render content first
+    const content = try Content.render(std.testing.allocator, .{ .title = "Home" });
+    defer std.testing.allocator.free(content);
+
+    // Render layout with content injected
+    const result = try Layout.renderWithYield(std.testing.allocator, .{}, content);
+    defer std.testing.allocator.free(result);
+    try std.testing.expectEqualStrings("<html><body><h1>Home</h1></body></html>", result);
 }
