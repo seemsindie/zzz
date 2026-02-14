@@ -14,10 +14,50 @@ pub const SessionConfig = struct {
 };
 
 /// A single session entry: maps a 32-char hex ID to an Assigns snapshot.
+/// Values are deep-copied into `value_store` so they survive across requests.
 const SessionEntry = struct {
     id: [32]u8,
-    data: Assigns,
+    data: Assigns = .{},
     active: bool = false,
+    /// Static buffer holding copies of assign value data.
+    value_store: [2048]u8 = undefined,
+    value_store_len: usize = 0,
+
+    /// Deep-copy assigns into this entry, copying value bytes into value_store.
+    /// Keys are assumed to be string literals (static lifetime) and are not copied.
+    /// Uses a staging buffer to avoid @memcpy aliasing when values already point
+    /// into value_store (loaded from a previous persist).
+    fn persistAssigns(self: *SessionEntry, assigns: *const Assigns) void {
+        // Stage into a temp buffer to avoid aliasing with value_store
+        var staging: [2048]u8 = undefined;
+        var staging_len: usize = 0;
+        var count: usize = 0;
+        var keys: [16][]const u8 = undefined;
+        var offsets: [16]usize = undefined;
+        var lengths: [16]usize = undefined;
+
+        for (assigns.entries[0..assigns.len]) |kv| {
+            if (std.mem.eql(u8, kv.key, "session_id")) continue;
+            if (staging_len + kv.value.len <= staging.len and count < 16) {
+                keys[count] = kv.key;
+                offsets[count] = staging_len;
+                lengths[count] = kv.value.len;
+                @memcpy(staging[staging_len .. staging_len + kv.value.len], kv.value);
+                staging_len += kv.value.len;
+                count += 1;
+            }
+        }
+
+        // Copy from staging to value_store (guaranteed no aliasing)
+        @memcpy(self.value_store[0..staging_len], staging[0..staging_len]);
+        self.value_store_len = staging_len;
+
+        // Rebuild data with slices pointing into value_store
+        self.data = .{};
+        for (0..count) |i| {
+            self.data.put(keys[i], self.value_store[offsets[i] .. offsets[i] + lengths[i]]);
+        }
+    }
 };
 
 /// Create a session middleware with the given config.
@@ -107,11 +147,10 @@ pub fn session(comptime config: SessionConfig) HandlerFn {
                 return entry;
             }
             // Store is full — evict the oldest entry
-            store[0] = .{
-                .id = generateId(),
-                .data = .{},
-                .active = true,
-            };
+            store[0].id = generateId();
+            store[0].data = .{};
+            store[0].value_store_len = 0;
+            store[0].active = true;
             return &store[0];
         }
 
@@ -156,8 +195,8 @@ pub fn session(comptime config: SessionConfig) HandlerFn {
 
             try ctx.next();
 
-            // After handler: persist assigns back to session store
-            entry.data = ctx.assigns;
+            // After handler: deep-copy assigns into session-owned storage
+            entry.persistAssigns(&ctx.assigns);
         }
     };
     return &S.handle;

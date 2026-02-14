@@ -85,6 +85,16 @@ pub const ZzzJsConfig = @import("middleware/zzz_js.zig").ZzzJsConfig;
 // WebSocket Protocol (for advanced usage)
 pub const ws_protocol = @import("core/websocket/websocket.zig");
 
+// Channel System
+pub const Socket = @import("core/channel/socket.zig").Socket;
+pub const ChannelDef = @import("core/channel/channel.zig").ChannelDef;
+pub const EventHandler = @import("core/channel/channel.zig").EventHandler;
+pub const JoinResult = @import("core/channel/channel.zig").JoinResult;
+pub const ChannelConfig = @import("middleware/channel.zig").ChannelConfig;
+pub const PubSub = @import("core/channel/pubsub.zig").PubSub;
+pub const Presence = @import("core/channel/presence.zig").Presence;
+pub const channel_mod = @import("core/channel/channel_mod.zig");
+
 // Template Engine
 pub const template = @import("template/engine.zig").template;
 pub const templateWithPartials = @import("template/engine.zig").templateWithPartials;

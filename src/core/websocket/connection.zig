@@ -19,6 +19,11 @@ pub const Handler = struct {
     on_close: ?*const fn (*WebSocket, u16, []const u8) void = null,
 };
 
+/// Spin-lock helper for std.atomic.Mutex (which only provides tryLock).
+fn spinLock(m: *std.atomic.Mutex) void {
+    while (!m.tryLock()) {}
+}
+
 /// User-facing WebSocket connection handle, passed to handler callbacks.
 pub const WebSocket = struct {
     allocator: Allocator,
@@ -32,8 +37,13 @@ pub const WebSocket = struct {
     write_fn: *const fn (*anyopaque, []const u8) anyerror!void,
     flush_fn: *const fn (*anyopaque) anyerror!void,
 
+    /// Mutex protecting all writes — allows safe cross-thread broadcasts.
+    write_mutex: std.atomic.Mutex = .unlocked,
+
     /// Send a text message.
     pub fn send(self: *WebSocket, data: []const u8) void {
+        spinLock(&self.write_mutex);
+        defer self.write_mutex.unlock();
         if (self.closed) return;
         self.writeFrame(.text, data) catch {
             self.closed = true;
@@ -42,6 +52,8 @@ pub const WebSocket = struct {
 
     /// Send a binary message.
     pub fn sendBinary(self: *WebSocket, data: []const u8) void {
+        spinLock(&self.write_mutex);
+        defer self.write_mutex.unlock();
         if (self.closed) return;
         self.writeFrame(.binary, data) catch {
             self.closed = true;
@@ -50,6 +62,8 @@ pub const WebSocket = struct {
 
     /// Initiate a close with code and reason.
     pub fn close(self: *WebSocket, code: u16, reason: []const u8) void {
+        spinLock(&self.write_mutex);
+        defer self.write_mutex.unlock();
         if (self.closed) return;
         self.closed = true;
         self.writeCloseFrame(code, reason) catch {};
@@ -105,14 +119,14 @@ pub const WebSocket = struct {
 };
 
 /// Type-erased writer vtable generator.
-fn WriterVTable(comptime WriterType: type) type {
+pub fn WriterVTable(comptime WriterType: type) type {
     return struct {
-        fn writeAll(ctx: *anyopaque, data: []const u8) anyerror!void {
+        pub fn writeAll(ctx: *anyopaque, data: []const u8) anyerror!void {
             const writer: *WriterType = @ptrCast(@alignCast(ctx));
             try writer.writeAll(data);
         }
 
-        fn flush(ctx: *anyopaque) anyerror!void {
+        pub fn flush(ctx: *anyopaque) anyerror!void {
             const writer: *WriterType = @ptrCast(@alignCast(ctx));
             try writer.flush();
         }
@@ -210,6 +224,8 @@ pub fn runLoop(
         switch (frame.opcode) {
             .ping => {
                 // Auto-pong with same payload
+                spinLock(&ws.write_mutex);
+                defer ws.write_mutex.unlock();
                 ws.writeFrame(.pong, frame.payload) catch {
                     ws.closed = true;
                     break;
@@ -224,8 +240,10 @@ pub fn runLoop(
 
                 // Echo the close frame, then notify handler
                 if (!ws.closed) {
+                    spinLock(&ws.write_mutex);
                     ws.closed = true;
                     ws.writeCloseFrame(code, reason) catch {};
+                    ws.write_mutex.unlock();
                     if (handler.on_close) |on_close| {
                         on_close(&ws, code, reason);
                     }

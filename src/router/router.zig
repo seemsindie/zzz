@@ -11,6 +11,8 @@ const route_mod = @import("route.zig");
 const Segment = route_mod.Segment;
 const ws_middleware = @import("../middleware/websocket.zig");
 const WsConfig = ws_middleware.WsConfig;
+const channel_middleware = @import("../middleware/channel.zig");
+const ChannelConfig = channel_middleware.ChannelConfig;
 
 /// A route definition tuple used in the config DSL.
 pub const RouteDef = struct {
@@ -79,6 +81,11 @@ pub const Router = struct {
     /// Define a WebSocket route. Generates a GET handler that upgrades to WebSocket.
     pub fn ws(comptime pattern: []const u8, comptime config: WsConfig) RouteDef {
         return .{ .method = .GET, .pattern = pattern, .handler = ws_middleware.wsHandler(config) };
+    }
+
+    /// Define a channel WebSocket route (Phoenix-style channels).
+    pub fn channel(comptime pattern: []const u8, comptime config: ChannelConfig) RouteDef {
+        return .{ .method = .GET, .pattern = pattern, .handler = channel_middleware.channelHandler(config) };
     }
 
     /// RESTful resource handlers for auto-generating CRUD routes.

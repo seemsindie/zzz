@@ -221,29 +221,29 @@ zig build run -- --some-arg
 - [x] WebSocket module re-exports (`src/core/websocket/websocket.zig`)
 - [x] Root module exports (WebSocket, WsMessage, WsConfig, zzzJs)
 
-## Phase 4b: Channel System (Future)
+## Phase 4b: Channel System
 
 ### Channel System (Phoenix-style)
-- [ ] Channel definition (topic pattern + join/leave/handle_in)
-- [ ] Topic-based PubSub (in-process)
-- [ ] Channel join with authorization
-- [ ] Incoming message handlers (event name -> handler)
-- [ ] Broadcast to all subscribers of a topic
-- [ ] Push messages to specific socket
-- [ ] Channel reply messages
-- [ ] Channel leave / disconnect handling
-- [ ] Heartbeat monitoring per socket
+- [x] Channel definition (topic pattern + join/leave/handle_in)
+- [x] Topic-based PubSub (in-process)
+- [x] Channel join with authorization
+- [x] Incoming message handlers (event name -> handler)
+- [x] Broadcast to all subscribers of a topic
+- [x] Push messages to specific socket
+- [x] Channel reply messages
+- [x] Channel leave / disconnect handling
+- [x] Heartbeat monitoring per socket
 
 ### Presence
-- [ ] Presence tracking (who's in which topic)
-- [ ] Presence join/leave events
-- [ ] Presence list with metadata
-- [ ] Presence diff tracking (efficient updates)
+- [x] Presence tracking (who's in which topic)
+- [x] Presence join/leave events
+- [x] Presence list with metadata
+- [x] Presence diff tracking (efficient updates)
 
 ### PubSub
-- [ ] In-process PubSub (single node)
-- [ ] Subscribe/unsubscribe to topics
-- [ ] Broadcast to topic
+- [x] In-process PubSub (single node)
+- [x] Subscribe/unsubscribe to topics
+- [x] Broadcast to topic
 - [ ] Direct message to specific subscriber
 - [ ] Distributed PubSub (multi-node, future)
 
@@ -252,19 +252,19 @@ zig build run -- --some-arg
 ## Phase 5: Database Layer (zzz_db)
 
 ### Connection & Pooling
-- [ ] Initialize zzz_db as separate package in workspace
+- [x] Initialize zzz_db as separate package in workspace
 - [ ] PostgreSQL adapter via libpq (@cImport)
-- [ ] SQLite adapter via sqlite3 (@cImport)
-- [ ] Connection pool (configurable size, checkout/checkin)
-- [ ] Connection health checks
-- [ ] Auto-reconnection on connection loss
-- [ ] Connection timeout handling
+- [x] SQLite adapter via sqlite3 (@cImport)
+- [x] Connection pool (configurable size, checkout/checkin)
+- [x] Connection health checks
+- [x] Auto-reconnection on connection loss
+- [x] Connection timeout handling
 
 ### Schema Definition
-- [ ] Comptime schema definition (struct -> table mapping)
-- [ ] Field types mapping (Zig types -> SQL types)
-- [ ] Primary key declaration
-- [ ] Timestamps (inserted_at, updated_at) auto-fields
+- [x] Comptime schema definition (struct -> table mapping)
+- [x] Field types mapping (Zig types -> SQL types)
+- [x] Primary key declaration
+- [x] Timestamps (inserted_at, updated_at) auto-fields
 - [ ] has_many association
 - [ ] belongs_to association
 - [ ] has_one association
@@ -272,28 +272,28 @@ zig build run -- --some-arg
 - [ ] Virtual/computed fields
 
 ### Query Builder
-- [ ] SELECT builder with field selection
-- [ ] WHERE clauses (=, !=, >, <, >=, <=, IN, LIKE, IS NULL)
-- [ ] AND/OR composition
-- [ ] ORDER BY (asc/desc, multiple fields)
-- [ ] LIMIT / OFFSET
+- [x] SELECT builder with field selection
+- [x] WHERE clauses (=, !=, >, <, >=, <=, LIKE, IS NULL)
+- [x] AND/OR composition
+- [x] ORDER BY (asc/desc, multiple fields)
+- [x] LIMIT / OFFSET
 - [ ] JOIN (inner, left, right, full)
 - [ ] GROUP BY / HAVING
 - [ ] COUNT, SUM, AVG, MIN, MAX aggregates
 - [ ] Subqueries
-- [ ] Raw SQL fragments
+- [x] Raw SQL fragments
 - [ ] Query composition (pipe queries together)
 - [ ] Preloading associations
 
 ### Repo Operations
-- [ ] Repo.all(query) -> []T
-- [ ] Repo.one(query) -> ?T
-- [ ] Repo.get(Schema, id) -> ?T
-- [ ] Repo.insert(changeset) -> T
-- [ ] Repo.update(changeset) -> T
-- [ ] Repo.delete(record) -> void
+- [x] Repo.all(query) -> []T
+- [x] Repo.one(query) -> ?T
+- [x] Repo.get(Schema, id) -> ?T
+- [x] Repo.insert(changeset) -> T
+- [x] Repo.update(changeset) -> T
+- [x] Repo.delete(record) -> void
 - [ ] Repo.aggregate(query, :count/:sum/etc)
-- [ ] Repo.exists?(query) -> bool
+- [x] Repo.exists?(query) -> bool
 - [ ] Repo.transaction(fn) -> result
 
 ### Changesets
@@ -324,7 +324,7 @@ zig build run -- --some-arg
 - [ ] Migration file generator
 
 ### Transactions
-- [ ] Begin/commit/rollback
+- [x] Begin/commit/rollback
 - [ ] Nested transactions (savepoints)
 - [ ] Transaction isolation levels
 
@@ -504,10 +504,10 @@ zig build run -- --some-arg
 | 2. Router & Middleware | **Complete** | 45 | 0 |
 | 3. Templates & Views | In Progress | 32 | 10 |
 | 4. WebSocket & zzz.js | **Complete** | 17 | 1 |
-| 4b. Channels | Not Started | 0 | 13 |
-| 5. Database (zzz_db) | Not Started | 0 | 49 |
+| 4b. Channels | **Complete** | 15 | 2 |
+| 5. Database (zzz_db) | In Progress | 19 | 30 |
 | 6. Jobs (zzz_jobs) | Not Started | 0 | 27 |
 | 7. Swagger | Not Started | 0 | 18 |
 | 8. Testing & CLI | Not Started | 0 | 24 |
 | Cross-Cutting | Not Started | 0 | 16 |
-| **Total** | | **124** | **160** |
+| **Total** | | **158** | **130** |
