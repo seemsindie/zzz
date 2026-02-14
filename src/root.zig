@@ -9,6 +9,7 @@ const std = @import("std");
 pub const Server = @import("core/server.zig").Server;
 pub const Config = @import("core/server.zig").Config;
 pub const Handler = @import("core/server.zig").Handler;
+pub const TlsConfig = @import("core/server.zig").TlsConfig;
 
 pub const Request = @import("core/http/request.zig").Request;
 pub const Method = @import("core/http/request.zig").Method;

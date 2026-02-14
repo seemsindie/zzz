@@ -8,8 +8,17 @@ const Request = @import("http/request.zig").Request;
 const Response = @import("http/response.zig").Response;
 const StatusCode = @import("http/status.zig").StatusCode;
 
+const tls_enabled = @import("tls_options").tls_enabled;
+const tls = if (tls_enabled) @import("tls") else undefined;
+
 /// Handler function type: receives a request, returns a response.
 pub const Handler = *const fn (Allocator, *const Request) anyerror!Response;
+
+/// TLS configuration for HTTPS mode.
+pub const TlsConfig = struct {
+    cert_file: [:0]const u8,
+    key_file: [:0]const u8,
+};
 
 /// Configuration for the HTTP server.
 pub const Config = struct {
@@ -24,6 +33,7 @@ pub const Config = struct {
     max_connections: u32 = 1024,
     max_requests_per_connection: u32 = 100,
     kernel_backlog: u31 = 128,
+    tls: ?TlsConfig = null,
 };
 
 /// Global server reference for signal handling.
@@ -36,6 +46,7 @@ pub const Server = struct {
     allocator: Allocator,
     active_connections: std.atomic.Value(u32) = std.atomic.Value(u32).init(0),
     shutdown_flag: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
+    ssl_ctx: if (tls_enabled) ?*tls.c.SSL_CTX else void = if (tls_enabled) null else {},
 
     pub fn init(allocator: Allocator, config: Config, handler: Handler) Server {
         return .{
@@ -49,6 +60,23 @@ pub const Server = struct {
     pub fn listen(self: *Server, io: Io) !void {
         self.installSignalHandlers();
 
+        // Initialize TLS context if configured
+        if (tls_enabled) {
+            if (self.config.tls) |tls_config| {
+                self.ssl_ctx = tls.SslContext.initSslContext(
+                    tls_config.cert_file,
+                    tls_config.key_file,
+                ) catch |err| {
+                    std.log.err("Failed to initialize TLS: {}", .{err});
+                    return err;
+                };
+                std.log.info("TLS enabled (HTTPS mode)", .{});
+            }
+        }
+        defer if (tls_enabled) {
+            if (self.ssl_ctx) |ctx| tls.SslContext.deinitSslContext(ctx);
+        };
+
         const address = try Io.net.IpAddress.parseIp4(self.config.host, self.config.port);
 
         var server = try address.listen(io, .{
@@ -57,7 +85,8 @@ pub const Server = struct {
         });
         defer server.deinit(io);
 
-        std.log.info("Zzz server listening on {s}:{d}", .{ self.config.host, self.config.port });
+        const scheme = if (tls_enabled and self.config.tls != null) "https" else "http";
+        std.log.info("Zzz server listening on {s}://{s}:{d}", .{ scheme, self.config.host, self.config.port });
 
         while (!self.shutdown_flag.load(.acquire)) {
             var stream = server.accept(io) catch |err| {
@@ -105,13 +134,37 @@ pub const Server = struct {
         // Set socket timeouts
         self.setSocketTimeouts(stream);
 
-        // Create a reader for the stream (persists across keep-alive requests)
+        if (tls_enabled) {
+            if (self.ssl_ctx) |ctx| {
+                // TLS path
+                const ssl = tls.SslContext.sslAccept(ctx, stream.socket.handle) catch |err| {
+                    std.log.debug("TLS handshake failed: {}", .{err});
+                    return;
+                };
+                defer tls.SslContext.sslFree(ssl);
+
+                var read_buf: [16384]u8 = undefined;
+                var tls_reader = tls.TlsReader.init(ssl, &read_buf);
+                var write_buf: [16384]u8 = undefined;
+                var tls_writer = tls.TlsWriter.init(ssl, &write_buf);
+
+                self.handleRequests(&tls_reader.interface, &tls_writer.interface);
+                return;
+            }
+        }
+
+        // Plain TCP path
         var read_buf: [16384]u8 = undefined;
         var reader: Io.net.Stream.Reader = .init(stream.*, io, &read_buf);
-
         var write_buf: [16384]u8 = undefined;
         var writer: Io.net.Stream.Writer = .init(stream.*, io, &write_buf);
 
+        self.handleRequests(&reader.interface, &writer.interface);
+    }
+
+    /// Handle the HTTP request/response loop over a reader/writer pair.
+    /// Works identically for both plain TCP and TLS connections.
+    fn handleRequests(self: *Server, reader: *Io.Reader, writer: *Io.Writer) void {
         var requests_served: u32 = 0;
 
         while (requests_served < self.config.max_requests_per_connection) {
@@ -122,7 +175,7 @@ pub const Server = struct {
             var total_read: usize = 0;
 
             while (total_read < req_buf.len) {
-                const byte = reader.interface.takeByte() catch return;
+                const byte = reader.takeByte() catch return;
                 req_buf[total_read] = byte;
                 total_read += 1;
 
@@ -143,7 +196,7 @@ pub const Server = struct {
             // Parse request
             const parse_result = http_parser.parse(self.allocator, req_buf[0..total_read]) catch |err| {
                 std.log.debug("parse error: {}", .{err});
-                self.sendError(io, stream, &writer, .bad_request);
+                self.sendError(writer, .bad_request);
                 return;
             };
             var req = parse_result.request;
@@ -152,16 +205,16 @@ pub const Server = struct {
             // Handle 100-continue
             if (req.header("Expect")) |expect| {
                 if (std.ascii.eqlIgnoreCase(expect, "100-continue")) {
-                    writer.interface.writeAll("HTTP/1.1 100 Continue\r\n\r\n") catch {};
-                    writer.interface.flush() catch {};
+                    writer.writeAll("HTTP/1.1 100 Continue\r\n\r\n") catch {};
+                    writer.flush() catch {};
                 }
             }
 
             // Read body
             if (req.isChunked() and req.contentLength() == null) {
                 // Chunked transfer encoding
-                const body_data = self.readChunkedBody(&reader, self.allocator) catch {
-                    self.sendError(io, stream, &writer, .bad_request);
+                const body_data = self.readChunkedBody(reader, self.allocator) catch {
+                    self.sendError(writer, .bad_request);
                     return;
                 };
                 if (body_data) |data| {
@@ -169,18 +222,18 @@ pub const Server = struct {
                     req.body = data;
 
                     // Call handler and send response
-                    self.processRequest(io, stream, &writer, &req, requests_served);
+                    self.processRequest(writer, &req, requests_served);
                 } else {
-                    self.processRequest(io, stream, &writer, &req, requests_served);
+                    self.processRequest(writer, &req, requests_served);
                 }
             } else if (req.contentLength()) |content_len| {
                 if (content_len > self.config.max_body_size) {
-                    self.sendError(io, stream, &writer, .payload_too_large);
+                    self.sendError(writer, .payload_too_large);
                     return;
                 }
                 if (content_len > 0) {
                     const body_buf = self.allocator.alloc(u8, content_len) catch {
-                        self.sendError(io, stream, &writer, .payload_too_large);
+                        self.sendError(writer, .payload_too_large);
                         return;
                     };
                     defer self.allocator.free(body_buf);
@@ -195,16 +248,16 @@ pub const Server = struct {
                     // Read remaining body bytes from stream
                     const body_so_far = @min(already_read, content_len);
                     if (body_so_far < content_len) {
-                        reader.interface.readSliceAll(body_buf[body_so_far..content_len]) catch return;
+                        reader.readSliceAll(body_buf[body_so_far..content_len]) catch return;
                     }
                     req.body = body_buf;
 
-                    self.processRequest(io, stream, &writer, &req, requests_served);
+                    self.processRequest(writer, &req, requests_served);
                 } else {
-                    self.processRequest(io, stream, &writer, &req, requests_served);
+                    self.processRequest(writer, &req, requests_served);
                 }
             } else {
-                self.processRequest(io, stream, &writer, &req, requests_served);
+                self.processRequest(writer, &req, requests_served);
             }
 
             requests_served += 1;
@@ -219,15 +272,13 @@ pub const Server = struct {
     /// Process a parsed request: call handler, set keep-alive headers, send response.
     fn processRequest(
         self: *Server,
-        io: Io,
-        stream: *Io.net.Stream,
-        writer: *Io.net.Stream.Writer,
+        writer: *Io.Writer,
         req: *Request,
         requests_served: u32,
     ) void {
         var resp = self.handler(self.allocator, req) catch |err| {
             std.log.err("handler error: {}", .{err});
-            self.sendError(io, stream, writer, .internal_server_error);
+            self.sendError(writer, .internal_server_error);
             return;
         };
         defer resp.deinit(self.allocator);
@@ -244,7 +295,7 @@ pub const Server = struct {
     }
 
     /// Read a chunked request body, accumulating chunks until the terminating 0-length chunk.
-    fn readChunkedBody(self: *Server, reader: *Io.net.Stream.Reader, allocator: Allocator) !?[]u8 {
+    fn readChunkedBody(self: *Server, reader: *Io.Reader, allocator: Allocator) !?[]u8 {
         var body: std.ArrayList(u8) = .empty;
         errdefer body.deinit(allocator);
 
@@ -254,10 +305,10 @@ pub const Server = struct {
             var line_len: usize = 0;
 
             while (line_len < line_buf.len) {
-                const byte = try reader.interface.takeByte();
+                const byte = try reader.takeByte();
                 if (byte == '\r') {
                     // Expect \n next
-                    const lf = try reader.interface.takeByte();
+                    const lf = try reader.takeByte();
                     if (lf != '\n') return error.InvalidChunkedEncoding;
                     break;
                 }
@@ -279,8 +330,8 @@ pub const Server = struct {
             // Chunk size 0 = end of body
             if (chunk_size == 0) {
                 // Read trailing \r\n after the last chunk
-                _ = reader.interface.takeByte() catch {};
-                _ = reader.interface.takeByte() catch {};
+                _ = reader.takeByte() catch {};
+                _ = reader.takeByte() catch {};
                 break;
             }
 
@@ -292,12 +343,12 @@ pub const Server = struct {
             // Read chunk data
             const start = body.items.len;
             try body.resize(allocator, start + chunk_size);
-            reader.interface.readSliceAll(body.items[start..]) catch
+            reader.readSliceAll(body.items[start..]) catch
                 return error.InvalidChunkedEncoding;
 
             // Read trailing \r\n after chunk data
-            const cr = reader.interface.takeByte() catch return error.InvalidChunkedEncoding;
-            const lf = reader.interface.takeByte() catch return error.InvalidChunkedEncoding;
+            const cr = reader.takeByte() catch return error.InvalidChunkedEncoding;
+            const lf = reader.takeByte() catch return error.InvalidChunkedEncoding;
             if (cr != '\r' or lf != '\n') return error.InvalidChunkedEncoding;
         }
 
@@ -305,29 +356,16 @@ pub const Server = struct {
         return try body.toOwnedSlice(allocator);
     }
 
-    fn sendResponseWriter(self: *Server, writer: *Io.net.Stream.Writer, resp: *const Response) void {
+    fn sendResponseWriter(self: *Server, writer: *Io.Writer, resp: *const Response) void {
         _ = self;
         const bytes = resp.serialize(std.heap.page_allocator) catch return;
         defer std.heap.page_allocator.free(bytes);
 
-        writer.interface.writeAll(bytes) catch return;
-        writer.interface.flush() catch return;
+        writer.writeAll(bytes) catch return;
+        writer.flush() catch return;
     }
 
-    fn sendResponse(self: *Server, io: Io, stream: *Io.net.Stream, resp: *const Response) void {
-        _ = self;
-        const bytes = resp.serialize(std.heap.page_allocator) catch return;
-        defer std.heap.page_allocator.free(bytes);
-
-        var write_buf: [16384]u8 = undefined;
-        var writer: Io.net.Stream.Writer = .init(stream.*, io, &write_buf);
-        writer.interface.writeAll(bytes) catch return;
-        writer.interface.flush() catch return;
-    }
-
-    fn sendError(self: *Server, io: Io, stream: *Io.net.Stream, writer: *Io.net.Stream.Writer, status: StatusCode) void {
-        _ = io;
-        _ = stream;
+    fn sendError(self: *Server, writer: *Io.Writer, status: StatusCode) void {
         var resp = Response.empty(status);
         self.sendResponseWriter(writer, &resp);
     }

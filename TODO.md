@@ -62,14 +62,14 @@ zig build run -- --some-arg
 
 ## Phase 1.5: TLS / HTTPS
 
-- [ ] OpenSSL integration via @cImport
-- [ ] SSL context creation and certificate loading
-- [ ] TLS handshake wrapping TCP streams
-- [ ] HTTPS server mode (listen on port 443 / custom)
+- [x] OpenSSL integration via @cImport
+- [x] SSL context creation and certificate loading
+- [x] TLS handshake wrapping TCP streams
+- [x] HTTPS server mode (listen on port 443 / custom)
 - [ ] SNI (Server Name Indication) support
-- [ ] TLS 1.2 and 1.3 support
+- [x] TLS 1.2 and 1.3 support
 - [ ] Certificate auto-reload on file change
-- [ ] Self-signed cert generation for development
+- [x] Self-signed cert generation for development
 
 ---
 
@@ -482,7 +482,7 @@ zig build run -- --some-arg
 | Phase | Status | Items Done | Items Remaining |
 |-------|--------|------------|-----------------|
 | 1. Foundation | **Complete** | 24 | 0 |
-| 1.5 TLS | Not Started | 0 | 8 |
+| 1.5 TLS | In Progress | 6 | 2 |
 | 2. Router & Middleware | **Complete** | 45 | 0 |
 | 3. Templates & Views | Not Started | 0 | 42 |
 | 4. WebSocket & Channels | Not Started | 0 | 22 |
@@ -491,4 +491,4 @@ zig build run -- --some-arg
 | 7. Swagger | Not Started | 0 | 18 |
 | 8. Testing & CLI | Not Started | 0 | 24 |
 | Cross-Cutting | Not Started | 0 | 16 |
-| **Total** | | **69** | **200** |
+| **Total** | | **75** | **194** |
