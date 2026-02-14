@@ -195,18 +195,33 @@ zig build run -- --some-arg
 
 ---
 
-## Phase 4: WebSocket & Channels
+## Phase 4: WebSocket & zzz.js Client Library
 
 ### WebSocket Protocol
-- [ ] RFC 6455 implementation
-- [ ] HTTP -> WebSocket upgrade handshake
-- [ ] Frame encoding (text, binary, ping, pong, close)
-- [ ] Frame decoding with masking/unmasking
-- [ ] Fragmented message reassembly
+- [x] RFC 6455 implementation (`src/core/websocket/frame.zig`)
+- [x] HTTP -> WebSocket upgrade handshake (`src/core/websocket/handshake.zig`)
+- [x] Frame encoding (text, binary, ping, pong, close) (`frame.zig`)
+- [x] Frame decoding with masking/unmasking (`frame.zig`)
+- [x] Fragmented message reassembly (`src/core/websocket/connection.zig`)
 - [ ] Per-message compression (permessage-deflate)
-- [ ] Ping/pong heartbeat keepalive
-- [ ] Clean close handshake
-- [ ] WebSocket URL routing
+- [x] Ping/pong heartbeat keepalive (`connection.zig` — auto-pong)
+- [x] Clean close handshake (`connection.zig`)
+- [x] WebSocket URL routing (`Router.ws()`, `src/middleware/websocket.zig`)
+
+### zzz.js Client Library
+- [x] WebSocket connect with auto-reconnect and exponential backoff (`src/js/zzz.js`)
+- [x] fetch() wrapper with auto CSRF token (`zzz.js`)
+- [x] AJAX form submission helper (`zzz.js`)
+- [x] zzz.js serving middleware at `/__zzz/zzz.js` (`src/middleware/zzz_js.zig`)
+- [x] Example WebSocket echo demo page (`example_app/src/templates/ws_demo.html.zzz`)
+
+### Server Integration
+- [x] Response WebSocketUpgrade struct (`src/core/http/response.zig`)
+- [x] Server processRequest WebSocket upgrade path (`src/core/server.zig`)
+- [x] WebSocket module re-exports (`src/core/websocket/websocket.zig`)
+- [x] Root module exports (WebSocket, WsMessage, WsConfig, zzzJs)
+
+## Phase 4b: Channel System (Future)
 
 ### Channel System (Phoenix-style)
 - [ ] Channel definition (topic pattern + join/leave/handle_in)
@@ -488,10 +503,11 @@ zig build run -- --some-arg
 | 1.5 TLS | In Progress | 6 | 2 |
 | 2. Router & Middleware | **Complete** | 45 | 0 |
 | 3. Templates & Views | In Progress | 32 | 10 |
-| 4. WebSocket & Channels | Not Started | 0 | 22 |
+| 4. WebSocket & zzz.js | **Complete** | 17 | 1 |
+| 4b. Channels | Not Started | 0 | 13 |
 | 5. Database (zzz_db) | Not Started | 0 | 49 |
 | 6. Jobs (zzz_jobs) | Not Started | 0 | 27 |
 | 7. Swagger | Not Started | 0 | 18 |
 | 8. Testing & CLI | Not Started | 0 | 24 |
 | Cross-Cutting | Not Started | 0 | 16 |
-| **Total** | | **107** | **162** |
+| **Total** | | **124** | **160** |

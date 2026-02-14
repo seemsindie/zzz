@@ -89,6 +89,7 @@ pub fn csrf(comptime config: CsrfConfig) HandlerFn {
                     try ctx.next();
                     return;
                 };
+                ctx.response.trackOwnedSlice(ctx.allocator, token_str);
                 ctx.assign(config.session_key, token_str);
                 token = token_str;
             }

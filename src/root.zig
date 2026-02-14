@@ -73,6 +73,18 @@ pub const JwtConfig = @import("middleware/auth.zig").JwtConfig;
 // Resource Helper (re-exported from Router)
 pub const ResourceHandlers = Router.ResourceHandlers;
 
+// WebSocket
+pub const WebSocket = @import("core/websocket/connection.zig").WebSocket;
+pub const WsMessage = @import("core/websocket/connection.zig").Message;
+pub const WsConfig = @import("middleware/websocket.zig").WsConfig;
+
+// zzz.js Client Library
+pub const zzzJs = @import("middleware/zzz_js.zig").zzzJs;
+pub const ZzzJsConfig = @import("middleware/zzz_js.zig").ZzzJsConfig;
+
+// WebSocket Protocol (for advanced usage)
+pub const ws_protocol = @import("core/websocket/websocket.zig");
+
 // Template Engine
 pub const template = @import("template/engine.zig").template;
 pub const templateWithPartials = @import("template/engine.zig").templateWithPartials;

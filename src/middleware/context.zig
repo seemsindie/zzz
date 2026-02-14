@@ -278,6 +278,7 @@ pub const Context = struct {
 
         // Allocate a copy so the header value outlives this stack frame
         const cookie_str = self.allocator.dupe(u8, buf[0..pos]) catch return;
+        self.response.trackOwnedSlice(self.allocator, cookie_str);
         self.response.headers.append(self.allocator, "Set-Cookie", cookie_str) catch {};
     }
 

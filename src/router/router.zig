@@ -9,6 +9,8 @@ const HandlerFn = @import("../middleware/context.zig").HandlerFn;
 const Params = @import("../middleware/context.zig").Params;
 const route_mod = @import("route.zig");
 const Segment = route_mod.Segment;
+const ws_middleware = @import("../middleware/websocket.zig");
+const WsConfig = ws_middleware.WsConfig;
 
 /// A route definition tuple used in the config DSL.
 pub const RouteDef = struct {
@@ -72,6 +74,11 @@ pub const Router = struct {
     /// Route with an arbitrary method.
     pub fn route(comptime method: Method, comptime pattern: []const u8, comptime handler: HandlerFn) RouteDef {
         return .{ .method = method, .pattern = pattern, .handler = handler };
+    }
+
+    /// Define a WebSocket route. Generates a GET handler that upgrades to WebSocket.
+    pub fn ws(comptime pattern: []const u8, comptime config: WsConfig) RouteDef {
+        return .{ .method = .GET, .pattern = pattern, .handler = ws_middleware.wsHandler(config) };
     }
 
     /// RESTful resource handlers for auto-generating CRUD routes.

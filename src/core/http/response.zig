@@ -3,9 +3,19 @@ const Allocator = std.mem.Allocator;
 const StatusCode = @import("status.zig").StatusCode;
 const Headers = @import("headers.zig").Headers;
 const Request = @import("request.zig").Request;
+const WsConnection = @import("../websocket/connection.zig");
+const context = @import("../../middleware/context.zig");
 
 /// HTTP response builder.
 pub const Response = struct {
+    /// WebSocket upgrade data, set by the WS middleware to signal a protocol upgrade.
+    pub const WebSocketUpgrade = struct {
+        handler: WsConnection.Handler,
+        params: context.Params,
+        query: context.Params,
+        assigns: context.Assigns,
+    };
+
     status: StatusCode = .ok,
     headers: Headers = .{},
     body: ?[]const u8 = null,
@@ -15,14 +25,28 @@ pub const Response = struct {
     version: Request.Version = .http_1_1,
     /// When true, serialize body using chunked transfer encoding.
     chunked: bool = false,
+    /// Set by WS middleware to signal upgrade. Pointer to keep Response small.
+    ws_handler: ?*const WebSocketUpgrade = null,
+    /// Heap-allocated slices that should be freed when this response is cleaned up.
+    /// Used by middleware that creates dynamically allocated header values or assign values.
+    owned_slices: std.ArrayList([]const u8) = .empty,
 
     pub fn deinit(self: *Response, allocator: Allocator) void {
+        for (self.owned_slices.items) |slice| {
+            allocator.free(@constCast(slice));
+        }
+        self.owned_slices.deinit(allocator);
         if (self.body_owned) {
             if (self.body) |b| {
                 allocator.free(@constCast(b));
             }
         }
         self.headers.deinit(allocator);
+    }
+
+    /// Track a heap-allocated slice to be freed when this response is deinitialized.
+    pub fn trackOwnedSlice(self: *Response, allocator: Allocator, slice: []const u8) void {
+        self.owned_slices.append(allocator, slice) catch {};
     }
 
     /// Set the response body with content type.

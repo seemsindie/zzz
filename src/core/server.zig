@@ -7,6 +7,8 @@ const http_parser = @import("http/parser.zig");
 const Request = @import("http/request.zig").Request;
 const Response = @import("http/response.zig").Response;
 const StatusCode = @import("http/status.zig").StatusCode;
+const ws_handshake = @import("websocket/handshake.zig");
+const ws_connection = @import("websocket/connection.zig");
 
 const tls_enabled = @import("tls_options").tls_enabled;
 const tls = if (tls_enabled) @import("tls") else undefined;
@@ -211,6 +213,7 @@ pub const Server = struct {
             }
 
             // Read body
+            var should_continue = true;
             if (req.isChunked() and req.contentLength() == null) {
                 // Chunked transfer encoding
                 const body_data = self.readChunkedBody(reader, self.allocator) catch {
@@ -222,9 +225,9 @@ pub const Server = struct {
                     req.body = data;
 
                     // Call handler and send response
-                    self.processRequest(writer, &req, requests_served);
+                    should_continue = self.processRequest(reader, writer, &req, requests_served);
                 } else {
-                    self.processRequest(writer, &req, requests_served);
+                    should_continue = self.processRequest(reader, writer, &req, requests_served);
                 }
             } else if (req.contentLength()) |content_len| {
                 if (content_len > self.config.max_body_size) {
@@ -252,13 +255,16 @@ pub const Server = struct {
                     }
                     req.body = body_buf;
 
-                    self.processRequest(writer, &req, requests_served);
+                    should_continue = self.processRequest(reader, writer, &req, requests_served);
                 } else {
-                    self.processRequest(writer, &req, requests_served);
+                    should_continue = self.processRequest(reader, writer, &req, requests_served);
                 }
             } else {
-                self.processRequest(writer, &req, requests_served);
+                should_continue = self.processRequest(reader, writer, &req, requests_served);
             }
+
+            // If processRequest returned false (e.g., WebSocket upgrade), exit the loop
+            if (!should_continue) return;
 
             requests_served += 1;
 
@@ -270,18 +276,51 @@ pub const Server = struct {
     }
 
     /// Process a parsed request: call handler, set keep-alive headers, send response.
+    /// Returns `true` to continue keep-alive loop, `false` to break (e.g. WebSocket upgrade).
     fn processRequest(
         self: *Server,
+        reader: *Io.Reader,
         writer: *Io.Writer,
         req: *Request,
         requests_served: u32,
-    ) void {
+    ) bool {
         var resp = self.handler(self.allocator, req) catch |err| {
             std.log.err("handler error: {}", .{err});
             self.sendError(writer, .internal_server_error);
-            return;
+            return true;
         };
         defer resp.deinit(self.allocator);
+
+        // Check for WebSocket upgrade
+        if (resp.status == .switching_protocols) {
+            if (resp.ws_handler) |ws_upgrade| {
+                // Build and send the 101 handshake response
+                const upgrade_bytes = ws_handshake.buildUpgradeResponse(self.allocator, req) catch {
+                    self.sendError(writer, .internal_server_error);
+                    return false;
+                };
+                defer self.allocator.free(upgrade_bytes);
+
+                writer.writeAll(upgrade_bytes) catch return false;
+                writer.flush() catch return false;
+
+                // Enter the WebSocket frame loop (blocks until WS closes)
+                ws_connection.runLoop(
+                    self.allocator,
+                    reader,
+                    writer,
+                    ws_upgrade.handler,
+                    ws_upgrade.params,
+                    ws_upgrade.query,
+                    ws_upgrade.assigns,
+                );
+
+                // Free the WebSocketUpgrade allocated in wsHandler middleware
+                self.allocator.destroy(ws_upgrade);
+
+                return false; // Connection taken over, exit HTTP loop
+            }
+        }
 
         // Set response version to match request
         resp.version = req.version;
@@ -292,6 +331,7 @@ pub const Server = struct {
         resp.headers.set(self.allocator, "Connection", if (keep_alive) "keep-alive" else "close") catch {};
 
         self.sendResponseWriter(writer, &resp);
+        return true;
     }
 
     /// Read a chunked request body, accumulating chunks until the terminating 0-length chunk.
@@ -371,18 +411,16 @@ pub const Server = struct {
     }
 
     /// Set socket read/write timeouts using setsockopt.
+    ///
+    /// NOTE: SO_RCVTIMEO and SO_SNDTIMEO are disabled because Zig 0.16's std.Io
+    /// reader/writer treat EAGAIN (returned when a timeout fires on a blocking
+    /// socket) as a programmer bug and panic. This affects both HTTP keep-alive
+    /// connections that sit idle and long-lived WebSocket connections. The config
+    /// fields are retained for future use when a compatible timeout mechanism is
+    /// available (e.g., poll/select before read, or async I/O).
     fn setSocketTimeouts(self: *Server, stream: *Io.net.Stream) void {
-        const fd = stream.socket.handle;
-
-        if (self.config.read_timeout_ms > 0) {
-            const read_tv = msToTimeval(self.config.read_timeout_ms);
-            std.posix.setsockopt(fd, std.posix.SOL.SOCKET, std.posix.SO.RCVTIMEO, std.mem.asBytes(&read_tv)) catch {};
-        }
-
-        if (self.config.write_timeout_ms > 0) {
-            const write_tv = msToTimeval(self.config.write_timeout_ms);
-            std.posix.setsockopt(fd, std.posix.SOL.SOCKET, std.posix.SO.SNDTIMEO, std.mem.asBytes(&write_tv)) catch {};
-        }
+        _ = self;
+        _ = stream;
     }
 
     fn msToTimeval(ms: u32) std.posix.timeval {

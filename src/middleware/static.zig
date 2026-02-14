@@ -53,6 +53,7 @@ pub fn staticFiles(comptime config: StaticConfig) HandlerFn {
 
                 // ETag from file size
                 if (result.etag) |etag| {
+                    ctx.response.trackOwnedSlice(ctx.allocator, etag);
                     ctx.response.headers.append(ctx.allocator, "ETag", etag) catch {};
 
                     // Check If-None-Match for 304
