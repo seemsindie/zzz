@@ -78,7 +78,7 @@ pub fn staticFiles(comptime config: StaticConfig) HandlerFn {
 
 const ReadResult = struct {
     data: []const u8,
-    etag: ?[]const u8,
+    etag: ?[]const u8, // heap-allocated via the same allocator
 };
 
 /// Read a file using C APIs (no Io required).
@@ -123,9 +123,8 @@ fn readFile(allocator: std.mem.Allocator, comptime base_dir: []const u8, rel_pat
         return null;
     }
 
-    // Build a simple ETag from file size
-    var etag_buf: [32]u8 = undefined;
-    const etag_str = std.fmt.bufPrint(&etag_buf, "\"{d}\"", .{size}) catch null;
+    // Build a simple ETag from file size (heap-allocated so it outlives this function)
+    const etag_str = std.fmt.allocPrint(allocator, "\"{d}\"", .{size}) catch null;
 
     return .{
         .data = buf,
