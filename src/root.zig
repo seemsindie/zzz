@@ -46,6 +46,10 @@ pub const SessionConfig = @import("middleware/session.zig").SessionConfig;
 pub const csrf = @import("middleware/csrf.zig").csrf;
 pub const CsrfConfig = @import("middleware/csrf.zig").CsrfConfig;
 
+// htmx Middleware
+pub const htmx = @import("middleware/htmx.zig").htmx;
+pub const HtmxConfig = @import("middleware/htmx.zig").HtmxConfig;
+
 // Error Handler
 pub const errorHandler = @import("middleware/error_handler.zig").errorHandler;
 pub const ErrorHandlerConfig = @import("middleware/error_handler.zig").ErrorHandlerConfig;

@@ -12,7 +12,7 @@ pub const Segment = union(enum) {
     comment: void,
     with_block: WithBlock,
     raw_block: []const u8,
-    yield: void,
+    yield: []const u8, // name: "" for default {{{yield}}}, "head" for {{{yield_head}}}, etc.
 
     pub const Conditional = struct {
         condition: []const u8,
@@ -188,10 +188,13 @@ fn processTag(comptime source: []const u8, comptime tag: TagInfo) TagResult {
             return .{ .segment = .{ .raw_block = content }, .next_pos = tag.end };
         }
 
-        // Raw variable: {{{name}}} — check for yield
+        // Raw variable: {{{name}}} — check for yield / yield_*
         if (tag.is_raw) {
             if (eql(content, "yield")) {
-                return .{ .segment = .{ .yield = {} }, .next_pos = tag.end };
+                return .{ .segment = .{ .yield = "" }, .next_pos = tag.end };
+            }
+            if (startsWith(content, "yield_")) {
+                return .{ .segment = .{ .yield = content[6..] }, .next_pos = tag.end };
             }
             return .{ .segment = .{ .raw_variable = content }, .next_pos = tag.end };
         }
@@ -407,14 +410,34 @@ fn makeTemplateType(comptime segments: []const Segment) type {
         pub fn render(allocator: Allocator, data: anytype) ![]const u8 {
             var buf: std.ArrayList(u8) = .empty;
             errdefer buf.deinit(allocator);
-            try renderSegments(segments, data, &buf, allocator, null);
+            try renderSegments(segments, data, &buf, allocator, null, {});
             return buf.toOwnedSlice(allocator);
         }
 
         pub fn renderWithYield(allocator: Allocator, data: anytype, yield_content: []const u8) ![]const u8 {
             var buf: std.ArrayList(u8) = .empty;
             errdefer buf.deinit(allocator);
-            try renderSegments(segments, data, &buf, allocator, yield_content);
+            try renderSegments(segments, data, &buf, allocator, yield_content, {});
+            return buf.toOwnedSlice(allocator);
+        }
+
+        /// Render with both a main yield content and named yield blocks.
+        /// `named_yields` is a struct with fields for each named yield
+        /// (e.g. `.{ .head = "<link ...>", .scripts = "<script ...>" }`).
+        pub fn renderWithYieldAndNamed(allocator: Allocator, data: anytype, yield_content: []const u8, named_yields: anytype) ![]const u8 {
+            var buf: std.ArrayList(u8) = .empty;
+            errdefer buf.deinit(allocator);
+            try renderSegments(segments, data, &buf, allocator, yield_content, named_yields);
+            return buf.toOwnedSlice(allocator);
+        }
+
+        /// Render with named yields using a struct that has `.content` for the
+        /// main yield and additional fields for named yields.
+        pub fn renderWithNamedYields(allocator: Allocator, data: anytype, yields: anytype) ![]const u8 {
+            const content = if (@hasField(@TypeOf(yields), "content")) yields.content else "";
+            var buf: std.ArrayList(u8) = .empty;
+            errdefer buf.deinit(allocator);
+            try renderSegments(segments, data, &buf, allocator, content, yields);
             return buf.toOwnedSlice(allocator);
         }
     };
@@ -451,10 +474,11 @@ pub fn templateWithPartials(comptime source: []const u8, comptime partials: anyt
     return makeTemplateType(comptime parse(processed));
 }
 
-/// Pre-process partial inclusions by replacing `{{> name}}` with the partial's source.
+/// Pre-process partial inclusions by replacing `{{> name}}` or `{{> name key="value" ...}}`
+/// with the partial's source, optionally substituting literal arguments.
 fn preprocessPartials(comptime source: []const u8, comptime partials: anytype) []const u8 {
     comptime {
-        @setEvalBranchQuota(100_000);
+        @setEvalBranchQuota(200_000);
 
         const partial_tag_open = "{{>";
         const partial_tag_close = "}}";
@@ -471,11 +495,22 @@ fn preprocessPartials(comptime source: []const u8, comptime partials: anytype) [
                 const content_start = tag_start + partial_tag_open.len;
                 const tag_end_offset = indexOf(source, partial_tag_close, content_start) orelse
                     @compileError("Unclosed partial tag {{> ...");
-                const name = trim(source[content_start..tag_end_offset]);
+                const tag_content = trim(source[content_start..tag_end_offset]);
+
+                // Split name from args
+                const name_and_args = splitPartialNameAndArgs(tag_content);
+                const name = name_and_args.name;
 
                 // Look up partial source
                 const partial_source = @field(partials, name);
-                total_len += partial_source.len;
+
+                // Apply argument substitution if there are args
+                if (name_and_args.args.len > 0) {
+                    const substituted = substituteArgs(partial_source, name_and_args.args);
+                    total_len += substituted.len;
+                } else {
+                    total_len += partial_source.len;
+                }
 
                 scan_pos = tag_end_offset + partial_tag_close.len;
             } else {
@@ -500,12 +535,21 @@ fn preprocessPartials(comptime source: []const u8, comptime partials: anytype) [
 
                 const content_start = tag_start + partial_tag_open.len;
                 const tag_end_offset = indexOf(source, partial_tag_close, content_start).?;
-                const name = trim(source[content_start..tag_end_offset]);
+                const tag_content = trim(source[content_start..tag_end_offset]);
 
-                // Copy partial source
+                const name_and_args = splitPartialNameAndArgs(tag_content);
+                const name = name_and_args.name;
+
+                // Copy partial source (with substitution if needed)
                 const partial_source = @field(partials, name);
-                @memcpy(result[out_pos..][0..partial_source.len], partial_source);
-                out_pos += partial_source.len;
+                if (name_and_args.args.len > 0) {
+                    const substituted = substituteArgs(partial_source, name_and_args.args);
+                    @memcpy(result[out_pos..][0..substituted.len], substituted);
+                    out_pos += substituted.len;
+                } else {
+                    @memcpy(result[out_pos..][0..partial_source.len], partial_source);
+                    out_pos += partial_source.len;
+                }
 
                 scan_pos = tag_end_offset + partial_tag_close.len;
             } else {
@@ -521,8 +565,126 @@ fn preprocessPartials(comptime source: []const u8, comptime partials: anytype) [
     }
 }
 
+/// Split partial tag content into name and remaining args string.
+/// E.g. `button type="primary" label="Click"` → name="button", args=`type="primary" label="Click"`
+const PartialNameAndArgs = struct {
+    name: []const u8,
+    args: []const u8,
+};
+
+fn splitPartialNameAndArgs(comptime content: []const u8) PartialNameAndArgs {
+    comptime {
+        // Find first space to split name from args
+        var i: usize = 0;
+        while (i < content.len) : (i += 1) {
+            if (content[i] == ' ' or content[i] == '\t') {
+                const args = trim(content[i..]);
+                return .{ .name = content[0..i], .args = args };
+            }
+        }
+        return .{ .name = content, .args = "" };
+    }
+}
+
+/// Substitute `{{key}}` placeholders in source with values from `key="value"` args string.
+fn substituteArgs(comptime source: []const u8, comptime args_str: []const u8) []const u8 {
+    comptime {
+        @setEvalBranchQuota(200_000);
+
+        // Parse all key="value" pairs from args_str
+        const max_args = 16;
+        var keys: [max_args][]const u8 = undefined;
+        var vals: [max_args][]const u8 = undefined;
+        var arg_count: usize = 0;
+
+        var apos: usize = 0;
+        while (apos < args_str.len) {
+            // Skip whitespace
+            while (apos < args_str.len and (args_str[apos] == ' ' or args_str[apos] == '\t')) {
+                apos += 1;
+            }
+            if (apos >= args_str.len) break;
+
+            // Find '='
+            const eq_pos = indexOf(args_str, "=", apos) orelse
+                @compileError("Partial argument missing '=': " ++ args_str[apos..]);
+            const key = trim(args_str[apos..eq_pos]);
+
+            // Expect '"' after '='
+            var vstart = eq_pos + 1;
+            while (vstart < args_str.len and (args_str[vstart] == ' ' or args_str[vstart] == '\t')) {
+                vstart += 1;
+            }
+            if (vstart >= args_str.len or args_str[vstart] != '"')
+                @compileError("Partial argument value must be quoted: " ++ key);
+            vstart += 1; // skip opening quote
+
+            // Find closing quote
+            const vend = indexOf(args_str, "\"", vstart) orelse
+                @compileError("Unclosed quote in partial argument: " ++ key);
+            const val = args_str[vstart..vend];
+
+            keys[arg_count] = key;
+            vals[arg_count] = val;
+            arg_count += 1;
+            apos = vend + 1;
+        }
+
+        // Now replace all occurrences of {{key}} with val in source
+        var current: []const u8 = source;
+        for (0..arg_count) |ai| {
+            const pattern = "{{" ++ keys[ai] ++ "}}";
+            current = replaceAll(current, pattern, vals[ai]);
+        }
+        return current;
+    }
+}
+
+/// Comptime string replace: replace all occurrences of `pattern` with `replacement` in `source`.
+fn replaceAll(comptime source: []const u8, comptime pattern: []const u8, comptime replacement: []const u8) []const u8 {
+    comptime {
+        if (pattern.len == 0) return source;
+
+        // Pass 1: count occurrences
+        var count: usize = 0;
+        var cpos: usize = 0;
+        while (cpos + pattern.len <= source.len) {
+            if (eql(source[cpos..][0..pattern.len], pattern)) {
+                count += 1;
+                cpos += pattern.len;
+            } else {
+                cpos += 1;
+            }
+        }
+
+        if (count == 0) return source;
+
+        // Compute output length
+        const out_len = source.len - (count * pattern.len) + (count * replacement.len);
+        var result: [out_len]u8 = undefined;
+        var out_pos: usize = 0;
+        var spos: usize = 0;
+
+        while (spos < source.len) {
+            if (spos + pattern.len <= source.len and eql(source[spos..][0..pattern.len], pattern)) {
+                @memcpy(result[out_pos..][0..replacement.len], replacement);
+                out_pos += replacement.len;
+                spos += pattern.len;
+            } else {
+                result[out_pos] = source[spos];
+                out_pos += 1;
+                spos += 1;
+            }
+        }
+
+        const final = result;
+        return &final;
+    }
+}
+
 /// Walk the comptime segment tree at runtime, rendering into a buffer.
-fn renderSegments(comptime segments: []const Segment, data: anytype, buf: *std.ArrayList(u8), allocator: Allocator, yield_content: ?[]const u8) !void {
+fn renderSegments(comptime segments: []const Segment, data: anytype, buf: *std.ArrayList(u8), allocator: Allocator, yield_content: ?[]const u8, named_yields: anytype) !void {
+    const NamedYieldsType = @TypeOf(named_yields);
     inline for (segments) |seg| {
         switch (seg) {
             .literal => |text| {
@@ -541,28 +703,40 @@ fn renderSegments(comptime segments: []const Segment, data: anytype, buf: *std.A
             .conditional => |cond| {
                 const truthy = resolveBool(data, cond.condition);
                 if (truthy) {
-                    try renderSegments(cond.then_body, data, buf, allocator, yield_content);
+                    try renderSegments(cond.then_body, data, buf, allocator, yield_content, named_yields);
                 } else {
-                    try renderSegments(cond.else_body, data, buf, allocator, yield_content);
+                    try renderSegments(cond.else_body, data, buf, allocator, yield_content, named_yields);
                 }
             },
             .loop => |lp| {
                 const slice = resolveSlice(data, lp.collection);
                 for (slice) |item| {
-                    try renderSegments(lp.body, item, buf, allocator, yield_content);
+                    try renderSegments(lp.body, item, buf, allocator, yield_content, named_yields);
                 }
             },
             .comment => {},
             .with_block => |wb| {
                 const scoped_data = resolveField(data, wb.binding);
-                try renderSegments(wb.body, scoped_data, buf, allocator, yield_content);
+                try renderSegments(wb.body, scoped_data, buf, allocator, yield_content, named_yields);
             },
             .raw_block => |text| {
                 try buf.appendSlice(allocator, text);
             },
-            .yield => {
-                if (yield_content) |yc| {
-                    try buf.appendSlice(allocator, yc);
+            .yield => |name| {
+                if (name.len == 0) {
+                    // Default yield — use yield_content
+                    if (yield_content) |yc| {
+                        try buf.appendSlice(allocator, yc);
+                    }
+                } else {
+                    // Named yield — look up in named_yields struct
+                    if (NamedYieldsType != void and NamedYieldsType != @TypeOf(.{})) {
+                        if (@hasField(NamedYieldsType, name)) {
+                            const val = @field(named_yields, name);
+                            try buf.appendSlice(allocator, val);
+                        }
+                        // If field doesn't exist, produce empty output
+                    }
                 }
             },
         }
@@ -868,4 +1042,78 @@ test "layout and content two-step rendering" {
     const result = try Layout.renderWithYield(std.testing.allocator, .{}, content);
     defer std.testing.allocator.free(result);
     try std.testing.expectEqualStrings("<html><body><h1>Home</h1></body></html>", result);
+}
+
+test "named yield renders content" {
+    const T = template("<head>{{{yield_head}}}</head><body>{{{yield}}}</body>");
+    const result = try T.renderWithYieldAndNamed(
+        std.testing.allocator,
+        .{},
+        "<p>Main</p>",
+        .{ .head = "<link rel=\"stylesheet\">" },
+    );
+    defer std.testing.allocator.free(result);
+    try std.testing.expectEqualStrings("<head><link rel=\"stylesheet\"></head><body><p>Main</p></body>", result);
+}
+
+test "named yield missing name produces empty output" {
+    const T = template("<head>{{{yield_head}}}</head><body>{{{yield}}}</body>");
+    // No .head field provided — should produce empty for that slot
+    const result = try T.renderWithYieldAndNamed(
+        std.testing.allocator,
+        .{},
+        "<p>Main</p>",
+        .{},
+    );
+    defer std.testing.allocator.free(result);
+    try std.testing.expectEqualStrings("<head></head><body><p>Main</p></body>", result);
+}
+
+test "renderWithNamedYields combines main and named" {
+    const T = template("<head>{{{yield_head}}}</head><body>{{{yield}}}</body><script>{{{yield_scripts}}}</script>");
+    const result = try T.renderWithNamedYields(
+        std.testing.allocator,
+        .{},
+        .{
+            .content = "<p>Body</p>",
+            .head = "<title>Test</title>",
+            .scripts = "app.init();",
+        },
+    );
+    defer std.testing.allocator.free(result);
+    try std.testing.expectEqualStrings("<head><title>Test</title></head><body><p>Body</p></body><script>app.init();</script>", result);
+}
+
+test "partial with literal arguments" {
+    const T = templateWithPartials(
+        "before{{> button type=\"primary\" label=\"Click Me\"}}after",
+        .{ .button = "<button class=\"{{type}}\">{{label}}</button>" },
+    );
+    const result = try T.render(std.testing.allocator, .{});
+    defer std.testing.allocator.free(result);
+    try std.testing.expectEqualStrings("before<button class=\"primary\">Click Me</button>after", result);
+}
+
+test "partial with arguments preserves other variables" {
+    const T = templateWithPartials(
+        "{{> greeting name=\"World\"}}",
+        .{ .greeting = "<p>Hello, {{name}}! Today is {{day}}.</p>" },
+    );
+    // {{name}} is substituted by the partial arg, {{day}} remains a template variable
+    const result = try T.render(std.testing.allocator, .{ .day = "Monday" });
+    defer std.testing.allocator.free(result);
+    try std.testing.expectEqualStrings("<p>Hello, World! Today is Monday.</p>", result);
+}
+
+test "backward compatibility: existing render still works" {
+    // Ensure all the old render/renderWithYield still work unchanged
+    const T = template("Hello {{name}}!");
+    const result = try T.render(std.testing.allocator, .{ .name = "World" });
+    defer std.testing.allocator.free(result);
+    try std.testing.expectEqualStrings("Hello World!", result);
+
+    const Layout = template("<div>{{{yield}}}</div>");
+    const result2 = try Layout.renderWithYield(std.testing.allocator, .{}, "inner");
+    defer std.testing.allocator.free(result2);
+    try std.testing.expectEqualStrings("<div>inner</div>", result2);
 }

@@ -332,6 +332,72 @@ pub const Context = struct {
         self.response.headers.append(self.allocator, "Content-Type", "text/html; charset=utf-8") catch {};
     }
 
+    // ── htmx helpers ────────────────────────────────────────────────
+
+    /// Returns true if this request was made by htmx (HX-Request header is "true").
+    pub fn isHtmx(self: *const Context) bool {
+        if (self.request.header("HX-Request")) |val| {
+            return std.mem.eql(u8, val, "true");
+        }
+        return false;
+    }
+
+    /// Set the HX-Redirect response header (htmx client-side redirect).
+    pub fn htmxRedirect(self: *Context, url: []const u8) void {
+        self.response.headers.append(self.allocator, "HX-Redirect", url) catch {};
+    }
+
+    /// Set the HX-Trigger response header (trigger client-side events).
+    pub fn htmxTrigger(self: *Context, event: []const u8) void {
+        self.response.headers.append(self.allocator, "HX-Trigger", event) catch {};
+    }
+
+    /// Set the HX-Push-Url response header (push URL to browser history).
+    pub fn htmxPushUrl(self: *Context, url: []const u8) void {
+        self.response.headers.append(self.allocator, "HX-Push-Url", url) catch {};
+    }
+
+    /// Set the HX-Reswap response header (override swap strategy).
+    pub fn htmxReswap(self: *Context, strategy: []const u8) void {
+        self.response.headers.append(self.allocator, "HX-Reswap", strategy) catch {};
+    }
+
+    /// Set the HX-Retarget response header (override target element).
+    pub fn htmxRetarget(self: *Context, selector: []const u8) void {
+        self.response.headers.append(self.allocator, "HX-Retarget", selector) catch {};
+    }
+
+    // ── Partial / fragment rendering ──────────────────────────────────
+
+    /// Render a template WITHOUT layout wrapping (for htmx fragment responses).
+    pub fn renderPartial(self: *Context, comptime Tmpl: type, status: StatusCode, data: anytype) !void {
+        const body = try Tmpl.render(self.allocator, data);
+        self.response.status = status;
+        self.response.body = body;
+        self.response.body_owned = true;
+        self.response.headers.append(self.allocator, "Content-Type", "text/html; charset=utf-8") catch {};
+    }
+
+    /// Render a content template wrapped in a layout with named yield blocks.
+    /// `extra_yields` is a struct with fields for named yield slots
+    /// (e.g. `.{ .head = "<link ...>", .scripts = "<script ...>" }`).
+    pub fn renderWithLayoutAndYields(
+        self: *Context,
+        comptime LayoutTmpl: type,
+        comptime ContentTmpl: type,
+        status: StatusCode,
+        data: anytype,
+        extra_yields: anytype,
+    ) !void {
+        const content = try ContentTmpl.render(self.allocator, data);
+        defer self.allocator.free(content);
+        const body = try LayoutTmpl.renderWithYieldAndNamed(self.allocator, data, content, extra_yields);
+        self.response.status = status;
+        self.response.body = body;
+        self.response.body_owned = true;
+        self.response.headers.append(self.allocator, "Content-Type", "text/html; charset=utf-8") catch {};
+    }
+
     /// Send a file as the response body. Reads from CWD.
     /// If `content_type` is null, auto-detects from file extension.
     pub fn sendFile(self: *Context, file_path: []const u8, content_type: ?[]const u8) void {
@@ -649,4 +715,100 @@ test "Context sendFile auto-detects MIME type" {
     if (ctx.response.headers.get("Content-Type")) |ct| {
         try std.testing.expect(ct.len > 0);
     }
+}
+
+test "isHtmx returns true when HX-Request header is present" {
+    var req: Request = .{};
+    try req.headers.append(std.testing.allocator, "HX-Request", "true");
+    defer req.deinit(std.testing.allocator);
+
+    const ctx: Context = .{
+        .request = &req,
+        .response = .{},
+        .params = .{},
+        .query = .{},
+        .assigns = .{},
+        .allocator = std.testing.allocator,
+        .next_handler = null,
+    };
+
+    try std.testing.expect(ctx.isHtmx());
+}
+
+test "isHtmx returns false when no HX-Request header" {
+    var req: Request = .{};
+    defer req.deinit(std.testing.allocator);
+
+    const ctx: Context = .{
+        .request = &req,
+        .response = .{},
+        .params = .{},
+        .query = .{},
+        .assigns = .{},
+        .allocator = std.testing.allocator,
+        .next_handler = null,
+    };
+
+    try std.testing.expect(!ctx.isHtmx());
+}
+
+test "htmx response headers are set correctly" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var req: Request = .{};
+    defer req.deinit(alloc);
+
+    var ctx: Context = .{
+        .request = &req,
+        .response = .{},
+        .params = .{},
+        .query = .{},
+        .assigns = .{},
+        .allocator = alloc,
+        .next_handler = null,
+    };
+
+    ctx.htmxRedirect("/new-page");
+    try std.testing.expectEqualStrings("/new-page", ctx.response.headers.get("HX-Redirect").?);
+
+    ctx.htmxTrigger("itemAdded");
+    try std.testing.expectEqualStrings("itemAdded", ctx.response.headers.get("HX-Trigger").?);
+
+    ctx.htmxPushUrl("/updated");
+    try std.testing.expectEqualStrings("/updated", ctx.response.headers.get("HX-Push-Url").?);
+
+    ctx.htmxReswap("outerHTML");
+    try std.testing.expectEqualStrings("outerHTML", ctx.response.headers.get("HX-Reswap").?);
+
+    ctx.htmxRetarget("#main");
+    try std.testing.expectEqualStrings("#main", ctx.response.headers.get("HX-Retarget").?);
+}
+
+test "renderPartial renders without layout" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    var req: Request = .{};
+    defer req.deinit(alloc);
+
+    const engine = @import("../template/engine.zig");
+    const Fragment = engine.template("<span>{{count}}</span>");
+
+    var ctx: Context = .{
+        .request = &req,
+        .response = .{},
+        .params = .{},
+        .query = .{},
+        .assigns = .{},
+        .allocator = alloc,
+        .next_handler = null,
+    };
+
+    try ctx.renderPartial(Fragment, .ok, .{ .count = "5" });
+    try std.testing.expectEqual(StatusCode.ok, ctx.response.status);
+    try std.testing.expectEqualStrings("<span>5</span>", ctx.response.body.?);
+    try std.testing.expectEqualStrings("text/html; charset=utf-8", ctx.response.headers.get("Content-Type").?);
 }

@@ -155,12 +155,12 @@ zig build run -- --some-arg
 ### Layout System
 - [x] Layout templates with `{{yield}}` blocks
 - [ ] Nested layouts
-- [ ] Named yield blocks (header, footer, sidebar)
+- [x] Named yield blocks (header, footer, sidebar)
 - [ ] Layout selection per controller/action
 
 ### Partials & Components
 - [x] Partial inclusion: `{{> partials/header}}`
-- [ ] Partial with arguments: `{{> button type="primary"}}`
+- [x] Partial with arguments: `{{> button type="primary"}}`
 - [ ] Component blocks: `{{#component "card"}}...{{/component}}`
 - [ ] Slot support for components
 
@@ -172,13 +172,13 @@ zig build run -- --some-arg
 - [ ] Custom helper registration
 
 ### htmx Integration (Built-in)
-- [ ] htmx request detection (`ctx.isHtmx()` — checks `HX-Request` header)
-- [ ] htmx response headers helper (`ctx.htmxTrigger()`, `ctx.htmxPushUrl()`, `ctx.htmxRedirect()`, `ctx.htmxReswap()`, `ctx.htmxRetarget()`)
-- [ ] Partial rendering mode — render a template fragment instead of full page when htmx request detected
-- [ ] `ctx.htmxRedirect()` — uses `HX-Redirect` header instead of 301/302 for htmx requests
+- [x] htmx request detection (`ctx.isHtmx()` — checks `HX-Request` header)
+- [x] htmx response headers helper (`ctx.htmxTrigger()`, `ctx.htmxPushUrl()`, `ctx.htmxRedirect()`, `ctx.htmxReswap()`, `ctx.htmxRetarget()`)
+- [x] Partial rendering mode — render a template fragment instead of full page when htmx request detected
+- [x] `ctx.htmxRedirect()` — uses `HX-Redirect` header instead of 301/302 for htmx requests
 - [ ] Configurable htmx.js serving (bundled via static middleware or CDN `<script>` helper)
 - [ ] Out-of-band swap support (`HX-Trigger-After-Swap`, `HX-Trigger-After-Settle`)
-- [ ] htmx middleware — auto-detect htmx requests and set `ctx.assigns.is_htmx`
+- [x] htmx middleware — auto-detect htmx requests and set `ctx.assigns.is_htmx`
 - [ ] Template helpers for htmx attributes (e.g. `{{hx-get "/items"}}`, `{{hx-swap "outerHTML"}}`)
 - [ ] Example: htmx-powered CRUD app (inline editing, live search, infinite scroll)
 
@@ -484,11 +484,11 @@ zig build run -- --some-arg
 | 1. Foundation | **Complete** | 24 | 0 |
 | 1.5 TLS | In Progress | 6 | 2 |
 | 2. Router & Middleware | **Complete** | 45 | 0 |
-| 3. Templates & Views | In Progress | 17 | 25 |
+| 3. Templates & Views | In Progress | 23 | 19 |
 | 4. WebSocket & Channels | Not Started | 0 | 22 |
 | 5. Database (zzz_db) | Not Started | 0 | 49 |
 | 6. Jobs (zzz_jobs) | Not Started | 0 | 27 |
 | 7. Swagger | Not Started | 0 | 18 |
 | 8. Testing & CLI | Not Started | 0 | 24 |
 | Cross-Cutting | Not Started | 0 | 16 |
-| **Total** | | **92** | **177** |
+| **Total** | | **98** | **171** |
