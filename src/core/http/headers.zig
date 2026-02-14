@@ -18,6 +18,18 @@ pub const Headers = struct {
         try self.entries.append(allocator, .{ .name = name, .value = value });
     }
 
+    /// Set a header value, replacing the first existing entry with the same name
+    /// or appending a new entry if none exists.
+    pub fn set(self: *Headers, allocator: Allocator, name: []const u8, value: []const u8) !void {
+        for (self.entries.items) |*entry| {
+            if (std.ascii.eqlIgnoreCase(entry.name, name)) {
+                entry.value = value;
+                return;
+            }
+        }
+        try self.append(allocator, name, value);
+    }
+
     /// Get the first value for a header name (case-insensitive).
     pub fn get(self: *const Headers, name: []const u8) ?[]const u8 {
         for (self.entries.items) |entry| {

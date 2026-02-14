@@ -13,6 +13,15 @@ pub const Handler = *const fn (Allocator, *const Request) anyerror!Response;
 pub const Config = struct {
     host: []const u8 = "127.0.0.1",
     port: u16 = 8888,
+    max_body_size: usize = 1024 * 1024, // 1MB default
+    max_header_size: usize = 16384, // 16KB default
+    read_timeout_ms: u32 = 30_000, // 30s
+    write_timeout_ms: u32 = 30_000, // 30s
+    keepalive_timeout_ms: u32 = 65_000, // 65s
+    worker_threads: u16 = 4, // 0 = single-threaded
+    max_connections: u32 = 1024,
+    max_requests_per_connection: u32 = 100,
+    kernel_backlog: u31 = 128,
 };
 
 /// HTTP server using Zig 0.16's std.Io networking.
