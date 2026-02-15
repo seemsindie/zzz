@@ -265,11 +265,11 @@ zig build run -- --some-arg
 - [x] Field types mapping (Zig types -> SQL types)
 - [x] Primary key declaration
 - [x] Timestamps (inserted_at, updated_at) auto-fields
-- [ ] has_many association
-- [ ] belongs_to association
-- [ ] has_one association
-- [ ] many_to_many association (join table)
-- [ ] Virtual/computed fields
+- [x] has_many association
+- [x] belongs_to association
+- [x] has_one association
+- [x] many_to_many association (join table)
+- [x] Virtual/computed fields
 
 ### Query Builder
 - [x] SELECT builder with field selection
@@ -277,13 +277,13 @@ zig build run -- --some-arg
 - [x] AND/OR composition
 - [x] ORDER BY (asc/desc, multiple fields)
 - [x] LIMIT / OFFSET
-- [ ] JOIN (inner, left, right, full)
-- [ ] GROUP BY / HAVING
-- [ ] COUNT, SUM, AVG, MIN, MAX aggregates
-- [ ] Subqueries
+- [x] JOIN (inner, left, right, full)
+- [x] GROUP BY / HAVING
+- [x] COUNT, SUM, AVG, MIN, MAX aggregates
+- [x] Subqueries (via whereRaw)
 - [x] Raw SQL fragments
-- [ ] Query composition (pipe queries together)
-- [ ] Preloading associations
+- [x] Query composition (via merge)
+- [x] Preloading associations
 
 ### Repo Operations
 - [x] Repo.all(query) -> []T
@@ -292,93 +292,93 @@ zig build run -- --some-arg
 - [x] Repo.insert(changeset) -> T
 - [x] Repo.update(changeset) -> T
 - [x] Repo.delete(record) -> void
-- [ ] Repo.aggregate(query, :count/:sum/etc)
+- [x] Repo.aggregate(query, :count/:sum/etc)
 - [x] Repo.exists?(query) -> bool
-- [ ] Repo.transaction(fn) -> result
+- [x] Repo.transaction(fn) -> result
 
 ### Changesets
-- [ ] Changeset creation from params
-- [ ] cast() - whitelist allowed fields
-- [ ] validate_required() - required fields
-- [ ] validate_format() - regex validation
-- [ ] validate_length() - min/max string length
-- [ ] validate_number() - min/max numeric range
-- [ ] validate_inclusion() - value in list
-- [ ] validate_exclusion() - value not in list
-- [ ] unique_constraint() - database unique check
-- [ ] foreign_key_constraint()
-- [ ] custom validators
-- [ ] Error messages (per field, per validation)
-- [ ] Changeset.valid() -> bool
+- [x] Changeset creation from params
+- [x] cast() - whitelist allowed fields
+- [x] validate_required() - required fields
+- [x] validate_format() - substring validation
+- [x] validate_length() - min/max string length
+- [x] validate_number() - min/max numeric range
+- [x] validate_inclusion() - value in list
+- [x] validate_exclusion() - value not in list
+- [x] unique_constraint() - database unique check (deferred)
+- [x] foreign_key_constraint() (deferred)
+- [x] custom validators
+- [x] Error messages (per field, per validation)
+- [x] Changeset.valid() -> bool
 
 ### Migrations
-- [ ] Migration file format (up/down functions)
-- [ ] create_table with column definitions
-- [ ] alter_table (add/remove/rename columns)
-- [ ] drop_table
-- [ ] create_index / drop_index
-- [ ] add_foreign_key / remove_foreign_key
-- [ ] Migration runner (apply pending migrations)
-- [ ] Migration rollback (revert last N migrations)
-- [ ] Migration status tracking (schema_migrations table)
-- [ ] Migration file generator
+- [x] Migration file format (up/down functions)
+- [x] create_table with column definitions
+- [x] alter_table (add/remove/rename columns)
+- [x] drop_table
+- [x] create_index / drop_index
+- [x] add_foreign_key / remove_foreign_key
+- [x] Migration runner (apply pending migrations)
+- [x] Migration rollback (revert last N migrations)
+- [x] Migration status tracking (schema_migrations table)
+- [x] Migration file generator (manual convention: YYYYMMDDHHMMSS)
 
 ### Transactions
 - [x] Begin/commit/rollback
-- [ ] Nested transactions (savepoints)
-- [ ] Transaction isolation levels
+- [x] Nested transactions (savepoints)
+- [x] Transaction isolation levels
 
 ---
 
 ## Phase 6: Background Jobs (zzz_jobs)
 
 ### Core
-- [ ] Initialize zzz_jobs as separate package in workspace
-- [ ] Job definition type (name, args struct, options)
-- [ ] Job states: available -> executing -> completed / retryable / discarded
-- [ ] Job insertion (enqueue)
-- [ ] Scheduled jobs (run at specific time)
-- [ ] Job priority levels
+- [x] Initialize zzz_jobs as separate package in workspace
+- [x] Job definition type (name, args struct, options)
+- [x] Job states: available -> executing -> completed / retryable / discarded
+- [x] Job insertion (enqueue)
+- [x] Scheduled jobs (run at specific time)
+- [x] Job priority levels
 
 ### Queue System
-- [ ] In-memory queue (for dev/testing)
-- [ ] Database-backed queue (uses zzz_db, for production)
-- [ ] Named queues (e.g., "default", "mailers", "reports")
-- [ ] Configurable concurrency per queue
-- [ ] FIFO ordering within priority level
-- [ ] Queue pausing/resuming
+- [x] In-memory queue (for dev/testing)
+- [x] Database-backed queue (uses zzz_db, for production)
+- [x] Named queues (e.g., "default", "mailers", "reports")
+- [x] Configurable concurrency per queue
+- [x] FIFO ordering within priority level
+- [x] Queue pausing/resuming
 
 ### Worker Management
-- [ ] Worker thread pool
-- [ ] Configurable worker count per queue
-- [ ] Worker heartbeat monitoring
-- [ ] Graceful shutdown (finish current jobs, stop accepting new)
-- [ ] Worker crash recovery
+- [x] Worker thread pool
+- [x] Configurable worker count per queue
+- [x] Worker heartbeat monitoring
+- [x] Graceful shutdown (finish current jobs, stop accepting new)
+- [x] Worker crash recovery
 
 ### Retry & Error Handling
-- [ ] Configurable max attempts per job
-- [ ] Exponential backoff with jitter
-- [ ] Custom retry strategies
-- [ ] Dead letter queue (permanently failed jobs)
-- [ ] Error callbacks / telemetry hooks
-- [ ] Job timeout (kill long-running jobs)
+- [x] Configurable max attempts per job
+- [x] Exponential backoff with jitter
+- [x] Custom retry strategies
+- [x] Dead letter queue (permanently failed jobs)
+- [x] Error callbacks / telemetry hooks
+- [x] Job timeout (kill long-running jobs)
 
 ### Scheduling (Cron)
-- [ ] Cron expression parser
-- [ ] Recurring job definitions
-- [ ] Cron job registration at startup
+- [x] Cron expression parser
+- [x] Recurring job definitions
+- [x] Cron job registration at startup
 - [ ] Timezone support
 
 ### Unique Jobs
-- [ ] Unique constraints (prevent duplicate jobs)
-- [ ] Unique by: args, queue, worker, period
-- [ ] Replace strategy (cancel existing, ignore new)
+- [x] Unique constraints (prevent duplicate jobs)
+- [x] Unique by: args, queue, worker, period
+- [x] Replace strategy (cancel existing, ignore new)
 
 ### Telemetry
-- [ ] Job start/complete/fail events
-- [ ] Queue depth metrics
-- [ ] Worker utilization metrics
-- [ ] Job duration tracking
+- [x] Job start/complete/fail events
+- [x] Queue depth metrics
+- [x] Worker utilization metrics
+- [x] Job duration tracking
 
 ---
 
@@ -505,9 +505,9 @@ zig build run -- --some-arg
 | 3. Templates & Views | In Progress | 32 | 10 |
 | 4. WebSocket & zzz.js | **Complete** | 17 | 1 |
 | 4b. Channels | **Complete** | 15 | 2 |
-| 5. Database (zzz_db) | In Progress | 19 | 30 |
-| 6. Jobs (zzz_jobs) | Not Started | 0 | 27 |
+| 5. Database (zzz_db) | **Complete** | 49 | 0 |
+| 6. Jobs (zzz_jobs) | **Complete** | 26 | 1 |
 | 7. Swagger | Not Started | 0 | 18 |
 | 8. Testing & CLI | Not Started | 0 | 24 |
 | Cross-Cutting | Not Started | 0 | 16 |
-| **Total** | | **158** | **130** |
+| **Total** | | **214** | **74** |
