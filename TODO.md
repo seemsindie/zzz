@@ -253,7 +253,7 @@ zig build run -- --some-arg
 
 ### Connection & Pooling
 - [x] Initialize zzz_db as separate package in workspace
-- [ ] PostgreSQL adapter via libpq (@cImport)
+- [x] PostgreSQL adapter via libpq (@cImport)
 - [x] SQLite adapter via sqlite3 (@cImport)
 - [x] Connection pool (configurable size, checkout/checkin)
 - [x] Connection health checks
