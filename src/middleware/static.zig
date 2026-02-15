@@ -1,4 +1,6 @@
 const std = @import("std");
+const builtin = @import("builtin");
+const native_os = builtin.os.tag;
 const c = std.c;
 const Context = @import("context.zig").Context;
 const HandlerFn = @import("context.zig").HandlerFn;
@@ -100,9 +102,16 @@ fn readFile(allocator: std.mem.Allocator, comptime base_dir: []const u8, rel_pat
     defer _ = c.close(fd);
 
     // Get file size
-    var stat_buf: c.Stat = undefined;
-    if (c.fstat(fd, &stat_buf) != 0) return null;
-    const size: usize = @intCast(stat_buf.size);
+    const size: usize = if (native_os == .linux) blk: {
+        var statx_buf = std.mem.zeroes(std.os.linux.Statx);
+        if (std.os.linux.errno(std.os.linux.statx(fd, "", std.os.linux.AT.EMPTY_PATH, .{ .SIZE = true }, &statx_buf)) != .SUCCESS) return null;
+        if (!statx_buf.mask.SIZE) return null;
+        break :blk @intCast(statx_buf.size);
+    } else blk: {
+        var stat_buf: c.Stat = undefined;
+        if (c.fstat(fd, &stat_buf) != 0) return null;
+        break :blk @intCast(stat_buf.size);
+    };
 
     // Don't serve directories or empty files
     if (size == 0) return null;

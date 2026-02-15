@@ -1,4 +1,6 @@
 const std = @import("std");
+const builtin = @import("builtin");
+const native_os = builtin.os.tag;
 const c = std.c;
 const Allocator = std.mem.Allocator;
 const Request = @import("../core/http/request.zig").Request;
@@ -436,9 +438,16 @@ pub const Context = struct {
         defer _ = c.close(fd);
 
         // Get file size
-        var stat_buf: c.Stat = undefined;
-        if (c.fstat(fd, &stat_buf) != 0) return;
-        const size: usize = @intCast(stat_buf.size);
+        const size: usize = if (native_os == .linux) blk: {
+            var statx_buf = std.mem.zeroes(std.os.linux.Statx);
+            if (std.os.linux.errno(std.os.linux.statx(fd, "", std.os.linux.AT.EMPTY_PATH, .{ .SIZE = true }, &statx_buf)) != .SUCCESS) return;
+            if (!statx_buf.mask.SIZE) return;
+            break :blk @intCast(statx_buf.size);
+        } else blk: {
+            var stat_buf: c.Stat = undefined;
+            if (c.fstat(fd, &stat_buf) != 0) return;
+            break :blk @intCast(stat_buf.size);
+        };
 
         if (size == 0) return;
         // Cap at 10MB
