@@ -99,6 +99,11 @@ pub const channel_mod = @import("core/channel/channel_mod.zig");
 pub const template = @import("template/engine.zig").template;
 pub const templateWithPartials = @import("template/engine.zig").templateWithPartials;
 
+// Swagger / OpenAPI
+pub const swagger = @import("swagger/root.zig");
+pub const ApiDoc = swagger.ApiDoc;
+pub const QueryParamDoc = swagger.QueryParamDoc;
+
 // Cookie helpers (re-exported from Context)
 pub const CookieOptions = Context.CookieOptions;
 

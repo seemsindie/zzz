@@ -14,6 +14,25 @@ const WsConfig = ws_middleware.WsConfig;
 const channel_middleware = @import("../middleware/channel.zig");
 const ChannelConfig = channel_middleware.ChannelConfig;
 
+/// Documentation for a query parameter in an API route.
+pub const QueryParamDoc = struct {
+    name: []const u8,
+    description: []const u8 = "",
+    required: bool = false,
+    schema_type: []const u8 = "string",
+};
+
+/// API documentation annotation for a route. Used by the swagger spec generator.
+/// Only routes with an `ApiDoc` attached (via `.doc()`) appear in the generated OpenAPI spec.
+pub const ApiDoc = struct {
+    summary: []const u8 = "",
+    description: []const u8 = "",
+    tag: []const u8 = "",
+    request_body: ?type = null,
+    response_body: ?type = null,
+    query_params: []const QueryParamDoc = &.{},
+};
+
 /// A route definition tuple used in the config DSL.
 pub const RouteDef = struct {
     method: Method,
@@ -21,6 +40,7 @@ pub const RouteDef = struct {
     handler: HandlerFn,
     middleware: []const HandlerFn = &.{},
     name: []const u8 = "",
+    api_doc: ?ApiDoc = null,
 
     /// Give this route a name for reverse URL generation.
     /// Usage: `Router.get("/users/:id", getUser).named("user_path")`
@@ -31,6 +51,21 @@ pub const RouteDef = struct {
             .handler = self.handler,
             .middleware = self.middleware,
             .name = route_name,
+            .api_doc = self.api_doc,
+        };
+    }
+
+    /// Attach API documentation to this route for OpenAPI spec generation.
+    /// Only routes with `.doc()` will appear in the generated Swagger spec.
+    /// Usage: `Router.get("/api/status", handler).doc(.{ .summary = "Health check", .tag = "System" })`
+    pub fn doc(self: RouteDef, comptime api_doc: ApiDoc) RouteDef {
+        return .{
+            .method = self.method,
+            .pattern = self.pattern,
+            .handler = self.handler,
+            .middleware = self.middleware,
+            .name = self.name,
+            .api_doc = api_doc,
         };
     }
 };
@@ -170,6 +205,7 @@ pub const Router = struct {
                     .handler = r.handler,
                     .middleware = mw ++ r.middleware,
                     .name = r.name,
+                    .api_doc = r.api_doc,
                 };
             }
             const result = expanded;
