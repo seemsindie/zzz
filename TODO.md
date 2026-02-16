@@ -385,35 +385,41 @@ zig build run -- --some-arg
 ## Phase 7: Swagger / OpenAPI
 
 ### Schema Generation
-- [ ] Comptime Zig struct -> JSON Schema conversion
-- [ ] Type mapping (i32->integer, []const u8->string, bool->boolean, etc.)
-- [ ] Optional type handling (?T -> nullable)
-- [ ] Array type handling ([]T -> array)
-- [ ] Nested struct handling (-> object)
-- [ ] Enum -> enum schema
+- [x] Comptime Zig struct -> JSON Schema conversion (`src/swagger/schema.zig`)
+- [x] Type mapping (i32->integer, []const u8->string, bool->boolean, etc.)
+- [x] Optional type handling (?T -> nullable)
+- [x] Array type handling ([]T -> array)
+- [x] Nested struct handling (-> object)
+- [x] Enum -> enum schema
 
 ### Route Documentation
-- [ ] Route annotation types (summary, description, tags)
-- [ ] Path parameter schemas
-- [ ] Query parameter schemas
-- [ ] Request body schemas
-- [ ] Response schemas (per status code)
+- [x] Route annotation types (summary, description, tags) (`ApiDoc` on `RouteDef`)
+- [x] Path parameter schemas (auto-extracted from `:param` patterns)
+- [x] Query parameter schemas (`QueryParamDoc`)
+- [x] Request body schemas (via `.doc(.{ .request_body = T })`)
+- [x] Response schemas (via `.doc(.{ .response_body = T })`)
 - [ ] Auto-detection from handler function signatures (comptime)
 
 ### OpenAPI Spec Generation
-- [ ] OpenAPI 3.0/3.1 JSON output
-- [ ] Info section (title, version, description)
-- [ ] Paths section (from router)
-- [ ] Components/schemas section (from Zig types)
-- [ ] Tags grouping
+- [x] OpenAPI 3.1.0 JSON output (`src/swagger/spec.zig`)
+- [x] Info section (title, version, description)
+- [x] Paths section (from router)
+- [x] Components/schemas section (from Zig types)
+- [x] Tags grouping
 - [ ] Security schemes (Bearer, Basic, API key)
-- [ ] Serve spec at configurable endpoint (e.g., /api/docs/openapi.json)
+- [x] Serve spec at configurable endpoint (`/api/docs/openapi.json`)
 
 ### Swagger UI
-- [ ] Bundle Swagger UI static assets
-- [ ] Serve Swagger UI at /api/docs
-- [ ] Auto-configure with generated spec URL
-- [ ] Development-only flag (disable in production)
+- [x] Swagger UI via CDN (`src/swagger/middleware.zig`)
+- [x] Serve Swagger UI at /api/docs
+- [x] Auto-configure with generated spec URL
+- [x] Configurable path and CDN version
+
+### Controller System
+- [x] `Controller.define()` — first-class controller type with prefix, tag, middleware
+- [x] Auto-prefix patterns, auto-tag swagger docs, shared middleware
+- [x] Composable with `++` and `Router.scope()`
+- [x] Example app refactored into 10 controller modules
 
 ---
 
@@ -507,7 +513,7 @@ zig build run -- --some-arg
 | 4b. Channels | **Complete** | 15 | 2 |
 | 5. Database (zzz_db) | **Complete** | 49 | 0 |
 | 6. Jobs (zzz_jobs) | **Complete** | 26 | 1 |
-| 7. Swagger | Not Started | 0 | 18 |
+| 7. Swagger & Controllers | **Complete** | 22 | 2 |
 | 8. Testing & CLI | Not Started | 0 | 24 |
 | Cross-Cutting | Not Started | 0 | 16 |
-| **Total** | | **214** | **74** |
+| **Total** | | **236** | **58** |
