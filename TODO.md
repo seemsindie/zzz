@@ -502,11 +502,11 @@ _(Moved to Phase 9: Release Preparation)_
 - [ ] CHANGELOG.md for each package (initial release)
 
 ### README & Project Docs
-- [ ] README.md for zzz (features, quick start, code examples, badges)
-- [ ] README.md for zzz_db (setup, schema, queries, migrations)
-- [ ] README.md for zzz_jobs (job definition, queues, scheduling)
-- [ ] README.md for zzz_cli (installation, commands reference)
-- [ ] README.md for example_app (how to run, what it demonstrates)
+- [x] README.md for zzz (features, quick start, code examples, badges)
+- [x] README.md for zzz_db (setup, schema, queries, migrations)
+- [x] README.md for zzz_jobs (job definition, queues, scheduling)
+- [x] README.md for zzz_cli (installation, commands reference)
+- [x] README.md for example_app (how to run, what it demonstrates)
 - [ ] CONTRIBUTING.md (code style, PR process, testing)
 - [ ] SECURITY.md (vulnerability reporting)
 - [ ] GitHub issue templates (bug report, feature request)
@@ -532,7 +532,7 @@ _(Moved to Phase 9: Release Preparation)_
 - [ ] Release CI workflow (build binaries on tag push, attach to GitHub Release)
 - [ ] Homebrew tap repository (homebrew-zzz)
 - [ ] Homebrew formula for zzz CLI
-- [ ] Install instructions in CLI README
+- [x] Install instructions in CLI README
 
 ### CI / Packaging
 - [x] GitHub Actions CI (build + test on Linux + macOS)
@@ -563,6 +563,6 @@ _(Moved to Phase 9: Release Preparation)_
 | 6. Jobs (zzz_jobs) | **Complete** | 26 | 1 |
 | 7. Swagger & Controllers | **Complete** | 23 | 1 |
 | 8. Testing & CLI | **Complete** | 23 | 1 |
-| 9. Release Prep (v0.1.0) | Not Started | 0 | 37 |
+| 9. Release Prep (v0.1.0) | In Progress | 6 | 31 |
 | Cross-Cutting | In Progress | 6 | 5 |
-| **Total** | | **265** | **61** |
+| **Total** | | **271** | **55** |
