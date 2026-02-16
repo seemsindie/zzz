@@ -485,12 +485,54 @@ zig build run -- --some-arg
 - [x] Health check endpoint
 
 ### Documentation
-- [ ] API reference (auto-generated from doc comments)
+_(Moved to Phase 9: Release Preparation)_
+
+### CI / Packaging
+_(Moved to Phase 9: Release Preparation)_
+
+---
+
+## Phase 9: Release Preparation (v0.1.0)
+
+### Version & Tagging
+- [ ] Bump zzz version from 0.0.0 to 0.1.0 in build.zig.zon
+- [ ] Align all package versions to 0.1.0 (zzz, zzz_db, zzz_jobs, zzz_cli)
+- [ ] Create git tags (v0.1.0) in all repositories
+- [ ] Create GitHub Releases with release notes for each repo
+- [ ] CHANGELOG.md for each package (initial release)
+
+### README & Project Docs
+- [x] README.md for zzz (features, quick start, code examples, badges)
+- [x] README.md for zzz_db (setup, schema, queries, migrations)
+- [x] README.md for zzz_jobs (job definition, queues, scheduling)
+- [x] README.md for zzz_cli (installation, commands reference)
+- [x] README.md for example_app (how to run, what it demonstrates)
+- [ ] CONTRIBUTING.md (code style, PR process, testing)
+- [ ] SECURITY.md (vulnerability reporting)
+- [ ] GitHub issue templates (bug report, feature request)
+- [ ] GitHub pull request template
+
+### Documentation Site
+- [ ] Choose doc engine (mdBook or zzz-powered)
 - [ ] Getting started guide
-- [ ] Tutorial: building a blog
+- [ ] Installation guide
 - [ ] Tutorial: building a REST API
+- [ ] Tutorial: building a blog with templates
 - [ ] Tutorial: real-time chat with channels
+- [ ] API reference (auto-generated from doc comments)
+- [ ] Middleware reference (all built-in middleware with config options)
+- [ ] Database guide (schema, queries, migrations, associations)
+- [ ] Background jobs guide
 - [ ] Deployment guide
+- [ ] Deploy docs site (GitHub Pages or similar)
+
+### CLI Distribution
+- [ ] Shell installer script (`curl -fsSL .../install.sh | sh`)
+- [ ] GitHub Releases with prebuilt binaries (Linux x86_64, macOS arm64, macOS x86_64)
+- [ ] Release CI workflow (build binaries on tag push, attach to GitHub Release)
+- [ ] Homebrew tap repository (homebrew-zzz)
+- [ ] Homebrew formula for zzz CLI
+- [x] Install instructions in CLI README
 
 ### CI / Packaging
 - [x] GitHub Actions CI (build + test on Linux + macOS)
@@ -498,6 +540,12 @@ zig build run -- --some-arg
 - [ ] Package published to Zig package index
 - [ ] Docker image for deployment
 - [ ] Example docker-compose with PostgreSQL
+- [ ] CI workflows for zzz_cli and example_app (build-only)
+
+### Package Publishing
+- [ ] Convert local path dependencies to package references (zzz_jobs -> zzz_db)
+- [ ] Test `zig fetch` from GitHub URLs for each package
+- [ ] Register packages with Zig package index (when available)
 
 ---
 
@@ -515,5 +563,6 @@ zig build run -- --some-arg
 | 6. Jobs (zzz_jobs) | **Complete** | 26 | 1 |
 | 7. Swagger & Controllers | **Complete** | 23 | 1 |
 | 8. Testing & CLI | **Complete** | 23 | 1 |
-| Cross-Cutting | In Progress | 6 | 10 |
-| **Total** | | **265** | **29** |
+| 9. Release Prep (v0.1.0) | In Progress | 6 | 31 |
+| Cross-Cutting | In Progress | 6 | 5 |
+| **Total** | | **271** | **55** |

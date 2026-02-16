@@ -18,11 +18,15 @@ pub fn build(b: *std.Build) void {
     // Add TLS options module
     mod.addImport("tls_options", tls_options.createModule());
 
+    // libc is needed unconditionally (sendFile, clock_gettime, etc.)
+    mod.link_libc = true;
+
     // Add TLS module (always available, guarded by comptime check in server.zig)
     const tls_mod = b.createModule(.{
         .root_source_file = b.path("src/tls/tls.zig"),
         .target = target,
     });
+    tls_mod.link_libc = true;
     mod.addImport("tls", tls_mod);
 
     if (tls_enabled) {
