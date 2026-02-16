@@ -1,4 +1,6 @@
 const std = @import("std");
+const builtin = @import("builtin");
+const native_os = builtin.os.tag;
 const c = std.c;
 const Context = @import("context.zig").Context;
 const HandlerFn = @import("context.zig").HandlerFn;
@@ -53,6 +55,7 @@ pub fn staticFiles(comptime config: StaticConfig) HandlerFn {
 
                 // ETag from file size
                 if (result.etag) |etag| {
+                    ctx.response.trackOwnedSlice(ctx.allocator, etag);
                     ctx.response.headers.append(ctx.allocator, "ETag", etag) catch {};
 
                     // Check If-None-Match for 304
@@ -78,7 +81,7 @@ pub fn staticFiles(comptime config: StaticConfig) HandlerFn {
 
 const ReadResult = struct {
     data: []const u8,
-    etag: ?[]const u8,
+    etag: ?[]const u8, // heap-allocated via the same allocator
 };
 
 /// Read a file using C APIs (no Io required).
@@ -99,9 +102,16 @@ fn readFile(allocator: std.mem.Allocator, comptime base_dir: []const u8, rel_pat
     defer _ = c.close(fd);
 
     // Get file size
-    var stat_buf: c.Stat = undefined;
-    if (c.fstat(fd, &stat_buf) != 0) return null;
-    const size: usize = @intCast(stat_buf.size);
+    const size: usize = if (native_os == .linux) blk: {
+        var statx_buf = std.mem.zeroes(std.os.linux.Statx);
+        if (std.os.linux.errno(std.os.linux.statx(fd, "", std.os.linux.AT.EMPTY_PATH, .{ .SIZE = true }, &statx_buf)) != .SUCCESS) return null;
+        if (!statx_buf.mask.SIZE) return null;
+        break :blk @intCast(statx_buf.size);
+    } else blk: {
+        var stat_buf: c.Stat = undefined;
+        if (c.fstat(fd, &stat_buf) != 0) return null;
+        break :blk @intCast(stat_buf.size);
+    };
 
     // Don't serve directories or empty files
     if (size == 0) return null;
@@ -123,9 +133,8 @@ fn readFile(allocator: std.mem.Allocator, comptime base_dir: []const u8, rel_pat
         return null;
     }
 
-    // Build a simple ETag from file size
-    var etag_buf: [32]u8 = undefined;
-    const etag_str = std.fmt.bufPrint(&etag_buf, "\"{d}\"", .{size}) catch null;
+    // Build a simple ETag from file size (heap-allocated so it outlives this function)
+    const etag_str = std.fmt.allocPrint(allocator, "\"{d}\"", .{size}) catch null;
 
     return .{
         .data = buf,
@@ -134,7 +143,7 @@ fn readFile(allocator: std.mem.Allocator, comptime base_dir: []const u8, rel_pat
 }
 
 /// Check if a path contains ".." segments (directory traversal).
-fn containsDotDot(path: []const u8) bool {
+pub fn containsDotDot(path: []const u8) bool {
     var i: usize = 0;
     while (i < path.len) {
         if (i + 1 < path.len and path[i] == '.' and path[i + 1] == '.') {
@@ -149,7 +158,7 @@ fn containsDotDot(path: []const u8) bool {
 }
 
 /// Map a file extension to a MIME content type.
-fn mimeFromPath(path: []const u8) []const u8 {
+pub fn mimeFromPath(path: []const u8) []const u8 {
     const ext = std.fs.path.extension(path);
 
     // Text

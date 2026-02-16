@@ -34,6 +34,7 @@ pub const StatusCode = enum(u16) {
     payload_too_large = 413,
     uri_too_long = 414,
     unsupported_media_type = 415,
+    expectation_failed = 417,
     too_many_requests = 429,
     request_header_fields_too_large = 431,
 
@@ -75,6 +76,7 @@ pub const StatusCode = enum(u16) {
             .payload_too_large => "Payload Too Large",
             .uri_too_long => "URI Too Long",
             .unsupported_media_type => "Unsupported Media Type",
+            .expectation_failed => "Expectation Failed",
             .too_many_requests => "Too Many Requests",
             .request_header_fields_too_large => "Request Header Fields Too Large",
             .internal_server_error => "Internal Server Error",

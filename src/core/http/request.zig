@@ -95,6 +95,12 @@ pub const Request = struct {
         return self.header("Content-Type");
     }
 
+    /// Check if Transfer-Encoding includes chunked.
+    pub fn isChunked(self: *const Request) bool {
+        const te = self.header("Transfer-Encoding") orelse return false;
+        return std.mem.indexOf(u8, te, "chunked") != null;
+    }
+
     /// Check if request is a WebSocket upgrade.
     pub fn isWebSocketUpgrade(self: *const Request) bool {
         const upgrade = self.header("Upgrade") orelse return false;

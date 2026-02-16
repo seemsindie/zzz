@@ -49,27 +49,27 @@ zig build run -- --some-arg
 - [x] Request body reading (Content-Length based)
 - [x] Example app with 4 routes (`src/main.zig`)
 - [x] All tests passing (10/10)
-- [ ] Chunked transfer encoding (request reading)
-- [ ] Chunked transfer encoding (response streaming)
-- [ ] Keep-alive connection reuse (currently closes after each response)
-- [ ] Configurable request size limits
-- [ ] Configurable read/write timeouts
-- [ ] Graceful shutdown (signal handling)
-- [ ] Multi-threaded accept (worker thread pool)
-- [ ] Connection backpressure / max connections limit
-- [ ] HTTP/1.0 compatibility mode
-- [ ] 100-continue handling
+- [x] Chunked transfer encoding (request reading)
+- [x] Chunked transfer encoding (response streaming)
+- [x] Keep-alive connection reuse (currently closes after each response)
+- [x] Configurable request size limits
+- [x] Configurable read/write timeouts
+- [x] Graceful shutdown (signal handling)
+- [x] Multi-threaded accept (worker thread pool)
+- [x] Connection backpressure / max connections limit
+- [x] HTTP/1.0 compatibility mode
+- [x] 100-continue handling
 
 ## Phase 1.5: TLS / HTTPS
 
-- [ ] OpenSSL integration via @cImport
-- [ ] SSL context creation and certificate loading
-- [ ] TLS handshake wrapping TCP streams
-- [ ] HTTPS server mode (listen on port 443 / custom)
+- [x] OpenSSL integration via @cImport
+- [x] SSL context creation and certificate loading
+- [x] TLS handshake wrapping TCP streams
+- [x] HTTPS server mode (listen on port 443 / custom)
 - [ ] SNI (Server Name Indication) support
-- [ ] TLS 1.2 and 1.3 support
+- [x] TLS 1.2 and 1.3 support
 - [ ] Certificate auto-reload on file change
-- [ ] Self-signed cert generation for development
+- [x] Self-signed cert generation for development
 
 ---
 
@@ -82,9 +82,9 @@ zig build run -- --some-arg
 - [x] Wildcard path matching (`*path`) (`src/router/route.zig` — `Segment.wildcard`)
 - [x] HTTP method dispatch (GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS) (`src/router/router.zig`)
 - [x] Route groups / scopes with shared middleware (`Router.scope()`)
-- [ ] RESTful resource helper (auto-generates index/show/create/update/delete)
+- [x] RESTful resource helper (auto-generates index/show/create/update/delete)
 - [x] Nested route scopes (via `Router.scope()` prefix concatenation)
-- [ ] Route naming for reverse URL generation
+- [x] Route naming for reverse URL generation
 - [x] Comptime route validation (catch missing handlers at compile time)
 - [x] 405 Method Not Allowed (path matches but wrong method, with `Allow` header)
 - [x] OPTIONS route helper + CORS preflight handling (`Router.options()` + `cors.zig`)
@@ -103,110 +103,147 @@ zig build run -- --some-arg
 - [x] Logger middleware (method, path, status, timing) (`src/middleware/logger.zig`)
 - [x] Static file serving (directory, MIME detection, ETag, caching headers) (`src/middleware/static.zig`)
 - [x] CORS middleware (configurable origins, methods, headers) (`src/middleware/cors.zig`)
-- [ ] Body parser: JSON (application/json)
-- [ ] Body parser: URL-encoded (application/x-www-form-urlencoded)
-- [ ] Body parser: Multipart form data (file uploads)
-- [ ] CSRF protection (token generation/validation)
-- [ ] Session middleware (cookie-based, pluggable stores)
-- [ ] gzip/deflate response compression
-- [ ] Rate limiting (token bucket per IP/key)
-- [ ] Auth: Bearer token extraction
-- [ ] Auth: Basic auth
-- [ ] Auth: JWT verification
-- [ ] Global error handler middleware (catch panics, render error pages)
+- [x] Body parser: JSON (application/json)
+- [x] Body parser: URL-encoded (application/x-www-form-urlencoded)
+- [x] Body parser: Multipart form data (file uploads)
+- [x] Body parser: text/* and binary fallback
+- [x] Unified `ctx.param()` (path -> body -> query, Phoenix-style)
+- [x] `ctx.pathParam()`, `ctx.formValue()`, `ctx.jsonBody()`, `ctx.rawBody()`, `ctx.file()`
+- [x] `FormData` fixed-size key-value store (32 fields)
+- [x] `FilePart` / `MultipartData` types for file uploads
+- [x] `urlDecode()` percent-encoding decoder
+- [x] CSRF protection (token generation/validation)
+- [x] Session middleware (cookie-based, pluggable stores)
+- [x] gzip/deflate response compression
+- [x] Rate limiting (token bucket per IP/key)
+- [x] Auth: Bearer token extraction
+- [x] Auth: Basic auth
+- [x] Auth: JWT verification
+- [x] Global error handler middleware (catch panics, render error pages)
 
 ### Controller Helpers
 - [x] json() response helper (`ctx.json()`)
 - [x] html() response helper (`ctx.html()`)
 - [x] text() response helper (`ctx.text()`)
 - [x] respond() generic helper with content type (`ctx.respond()`)
-- [ ] redirect() helper on Context
-- [ ] send_file() for file downloads
-- [ ] set_cookie() / delete_cookie()
+- [x] redirect() helper on Context
+- [x] send_file() for file downloads
+- [x] set_cookie() / delete_cookie()
 
 ---
 
-## Phase 3: Template Engine
+## Phase 3: Template Engine & View Layer
 
 ### Core Engine
-- [ ] Template file format (.zzz or .html.zzz extension)
-- [ ] Template lexer (tokenize template syntax)
-- [ ] Template AST parser
-- [ ] Comptime template compilation (templates -> Zig render functions)
-- [ ] Build.zig integration (compile templates during build)
-- [ ] Auto HTML escaping (XSS protection by default)
-- [ ] Triple-brace {{{ }}} for raw/unescaped output
+- [x] Template file format (.zzz or .html.zzz extension)
+- [x] Template lexer (tokenize template syntax)
+- [x] Template AST parser
+- [x] Comptime template compilation (templates -> Zig render functions)
+- [x] Build.zig integration (compile templates during build)
+- [x] Auto HTML escaping (XSS protection by default)
+- [x] Triple-brace {{{ }}} for raw/unescaped output
 
 ### Template Syntax
-- [ ] Variable interpolation: `{{name}}`
-- [ ] Dot notation: `{{user.name}}`
-- [ ] Conditionals: `{{#if}}` / `{{else}}` / `{{/if}}`
-- [ ] Iteration: `{{#each items as |item|}}` / `{{/each}}`
-- [ ] With blocks: `{{#with user}}` / `{{/with}}`
-- [ ] Comments: `{{! this is a comment }}`
-- [ ] Raw blocks: `{{{{raw}}}}` (no processing)
+- [x] Variable interpolation: `{{name}}`
+- [x] Dot notation: `{{user.name}}`
+- [x] Conditionals: `{{#if}}` / `{{else}}` / `{{/if}}`
+- [x] Iteration: `{{#each items as |item|}}` / `{{/each}}`
+- [x] With blocks: `{{#with user}}` / `{{/with}}`
+- [x] Comments: `{{! this is a comment }}`
+- [x] Raw blocks: `{{{{raw}}}}` (no processing)
 
 ### Layout System
-- [ ] Layout templates with `{{yield}}` blocks
+- [x] Layout templates with `{{yield}}` blocks
 - [ ] Nested layouts
-- [ ] Named yield blocks (header, footer, sidebar)
+- [x] Named yield blocks (header, footer, sidebar)
 - [ ] Layout selection per controller/action
 
 ### Partials & Components
-- [ ] Partial inclusion: `{{> partials/header}}`
-- [ ] Partial with arguments: `{{> button type="primary"}}`
+- [x] Partial inclusion: `{{> partials/header}}`
+- [x] Partial with arguments: `{{> button type="primary"}}`
 - [ ] Component blocks: `{{#component "card"}}...{{/component}}`
 - [ ] Slot support for components
 
-### Built-in Helpers
+### Built-in Helpers (Pipe Syntax)
 - [ ] `{{format_date date "YYYY-MM-DD"}}`
-- [ ] `{{truncate text 100}}`
-- [ ] `{{pluralize count "item" "items"}}`
-- [ ] `{{url_for "user_path" id=user.id}}`
-- [ ] Custom helper registration
+- [x] `{{title | truncate:20}}` — pipe syntax with truncate
+- [x] `{{count | pluralize:"item":"items"}}` — pipe syntax with pluralize
+- [x] `{{name | upper}}`, `{{name | lower}}` — case pipes
+- [x] `{{name | default:"N/A"}}` — default pipe
+- [x] Integer rendering: `{{count}}` with integer types
+- [ ] `{{url_for "user_path" id=user.id}}` — needs runtime route registry
+- [x] Custom helper registration — built-in pipe system (truncate, upper, lower, default, pluralize)
 
-### React/Vue SSR Bridge (Future)
+### htmx Integration (Built-in)
+- [x] htmx request detection (`ctx.isHtmx()` — checks `HX-Request` header)
+- [x] htmx response headers helper (`ctx.htmxTrigger()`, `ctx.htmxPushUrl()`, `ctx.htmxRedirect()`, `ctx.htmxReswap()`, `ctx.htmxRetarget()`)
+- [x] Partial rendering mode — render a template fragment instead of full page when htmx request detected
+- [x] `ctx.htmxRedirect()` — uses `HX-Redirect` header instead of 301/302 for htmx requests
+- [x] Configurable htmx.js serving (`htmx_cdn_version` config, `htmx_script` assign, `ctx.htmxScriptTag()`)
+- [x] Out-of-band swap support (`ctx.htmxTriggerAfterSwap()`, `ctx.htmxTriggerAfterSettle()`)
+- [x] htmx middleware — auto-detect htmx requests and set `ctx.assigns.is_htmx`
+- [x] Template helpers for htmx attributes — htmx attributes are plain HTML (`hx-get="/path"`) which works directly in templates
+- [x] Example: htmx-powered CRUD app (todo list with add/delete via htmx partials)
+
+### React/Vue/Svelte SSR Bridge (Future)
 - [ ] Shell out to Node/Deno/Bun for initial render
 - [ ] Pass props as JSON, receive rendered HTML
 - [ ] Hydration script injection
 - [ ] Embedded QuickJS option for in-process JS
+- [ ] SSR mode flag in router config (`.ssr = .{ .engine = .node, .entry = "src/App.tsx" }`)
+- [ ] API-only mode for SPA backends (JSON routes + CORS, no templates)
 
 ---
 
-## Phase 4: WebSocket & Channels
+## Phase 4: WebSocket & zzz.js Client Library
 
 ### WebSocket Protocol
-- [ ] RFC 6455 implementation
-- [ ] HTTP -> WebSocket upgrade handshake
-- [ ] Frame encoding (text, binary, ping, pong, close)
-- [ ] Frame decoding with masking/unmasking
-- [ ] Fragmented message reassembly
+- [x] RFC 6455 implementation (`src/core/websocket/frame.zig`)
+- [x] HTTP -> WebSocket upgrade handshake (`src/core/websocket/handshake.zig`)
+- [x] Frame encoding (text, binary, ping, pong, close) (`frame.zig`)
+- [x] Frame decoding with masking/unmasking (`frame.zig`)
+- [x] Fragmented message reassembly (`src/core/websocket/connection.zig`)
 - [ ] Per-message compression (permessage-deflate)
-- [ ] Ping/pong heartbeat keepalive
-- [ ] Clean close handshake
-- [ ] WebSocket URL routing
+- [x] Ping/pong heartbeat keepalive (`connection.zig` — auto-pong)
+- [x] Clean close handshake (`connection.zig`)
+- [x] WebSocket URL routing (`Router.ws()`, `src/middleware/websocket.zig`)
+
+### zzz.js Client Library
+- [x] WebSocket connect with auto-reconnect and exponential backoff (`src/js/zzz.js`)
+- [x] fetch() wrapper with auto CSRF token (`zzz.js`)
+- [x] AJAX form submission helper (`zzz.js`)
+- [x] zzz.js serving middleware at `/__zzz/zzz.js` (`src/middleware/zzz_js.zig`)
+- [x] Example WebSocket echo demo page (`example_app/src/templates/ws_demo.html.zzz`)
+
+### Server Integration
+- [x] Response WebSocketUpgrade struct (`src/core/http/response.zig`)
+- [x] Server processRequest WebSocket upgrade path (`src/core/server.zig`)
+- [x] WebSocket module re-exports (`src/core/websocket/websocket.zig`)
+- [x] Root module exports (WebSocket, WsMessage, WsConfig, zzzJs)
+
+## Phase 4b: Channel System
 
 ### Channel System (Phoenix-style)
-- [ ] Channel definition (topic pattern + join/leave/handle_in)
-- [ ] Topic-based PubSub (in-process)
-- [ ] Channel join with authorization
-- [ ] Incoming message handlers (event name -> handler)
-- [ ] Broadcast to all subscribers of a topic
-- [ ] Push messages to specific socket
-- [ ] Channel reply messages
-- [ ] Channel leave / disconnect handling
-- [ ] Heartbeat monitoring per socket
+- [x] Channel definition (topic pattern + join/leave/handle_in)
+- [x] Topic-based PubSub (in-process)
+- [x] Channel join with authorization
+- [x] Incoming message handlers (event name -> handler)
+- [x] Broadcast to all subscribers of a topic
+- [x] Push messages to specific socket
+- [x] Channel reply messages
+- [x] Channel leave / disconnect handling
+- [x] Heartbeat monitoring per socket
 
 ### Presence
-- [ ] Presence tracking (who's in which topic)
-- [ ] Presence join/leave events
-- [ ] Presence list with metadata
-- [ ] Presence diff tracking (efficient updates)
+- [x] Presence tracking (who's in which topic)
+- [x] Presence join/leave events
+- [x] Presence list with metadata
+- [x] Presence diff tracking (efficient updates)
 
 ### PubSub
-- [ ] In-process PubSub (single node)
-- [ ] Subscribe/unsubscribe to topics
-- [ ] Broadcast to topic
+- [x] In-process PubSub (single node)
+- [x] Subscribe/unsubscribe to topics
+- [x] Broadcast to topic
 - [ ] Direct message to specific subscriber
 - [ ] Distributed PubSub (multi-node, future)
 
@@ -215,213 +252,219 @@ zig build run -- --some-arg
 ## Phase 5: Database Layer (zzz_db)
 
 ### Connection & Pooling
-- [ ] Initialize zzz_db as separate package in workspace
-- [ ] PostgreSQL adapter via libpq (@cImport)
-- [ ] SQLite adapter via sqlite3 (@cImport)
-- [ ] Connection pool (configurable size, checkout/checkin)
-- [ ] Connection health checks
-- [ ] Auto-reconnection on connection loss
-- [ ] Connection timeout handling
+- [x] Initialize zzz_db as separate package in workspace
+- [x] PostgreSQL adapter via libpq (@cImport)
+- [x] SQLite adapter via sqlite3 (@cImport)
+- [x] Connection pool (configurable size, checkout/checkin)
+- [x] Connection health checks
+- [x] Auto-reconnection on connection loss
+- [x] Connection timeout handling
 
 ### Schema Definition
-- [ ] Comptime schema definition (struct -> table mapping)
-- [ ] Field types mapping (Zig types -> SQL types)
-- [ ] Primary key declaration
-- [ ] Timestamps (inserted_at, updated_at) auto-fields
-- [ ] has_many association
-- [ ] belongs_to association
-- [ ] has_one association
-- [ ] many_to_many association (join table)
-- [ ] Virtual/computed fields
+- [x] Comptime schema definition (struct -> table mapping)
+- [x] Field types mapping (Zig types -> SQL types)
+- [x] Primary key declaration
+- [x] Timestamps (inserted_at, updated_at) auto-fields
+- [x] has_many association
+- [x] belongs_to association
+- [x] has_one association
+- [x] many_to_many association (join table)
+- [x] Virtual/computed fields
 
 ### Query Builder
-- [ ] SELECT builder with field selection
-- [ ] WHERE clauses (=, !=, >, <, >=, <=, IN, LIKE, IS NULL)
-- [ ] AND/OR composition
-- [ ] ORDER BY (asc/desc, multiple fields)
-- [ ] LIMIT / OFFSET
-- [ ] JOIN (inner, left, right, full)
-- [ ] GROUP BY / HAVING
-- [ ] COUNT, SUM, AVG, MIN, MAX aggregates
-- [ ] Subqueries
-- [ ] Raw SQL fragments
-- [ ] Query composition (pipe queries together)
-- [ ] Preloading associations
+- [x] SELECT builder with field selection
+- [x] WHERE clauses (=, !=, >, <, >=, <=, LIKE, IS NULL)
+- [x] AND/OR composition
+- [x] ORDER BY (asc/desc, multiple fields)
+- [x] LIMIT / OFFSET
+- [x] JOIN (inner, left, right, full)
+- [x] GROUP BY / HAVING
+- [x] COUNT, SUM, AVG, MIN, MAX aggregates
+- [x] Subqueries (via whereRaw)
+- [x] Raw SQL fragments
+- [x] Query composition (via merge)
+- [x] Preloading associations
 
 ### Repo Operations
-- [ ] Repo.all(query) -> []T
-- [ ] Repo.one(query) -> ?T
-- [ ] Repo.get(Schema, id) -> ?T
-- [ ] Repo.insert(changeset) -> T
-- [ ] Repo.update(changeset) -> T
-- [ ] Repo.delete(record) -> void
-- [ ] Repo.aggregate(query, :count/:sum/etc)
-- [ ] Repo.exists?(query) -> bool
-- [ ] Repo.transaction(fn) -> result
+- [x] Repo.all(query) -> []T
+- [x] Repo.one(query) -> ?T
+- [x] Repo.get(Schema, id) -> ?T
+- [x] Repo.insert(changeset) -> T
+- [x] Repo.update(changeset) -> T
+- [x] Repo.delete(record) -> void
+- [x] Repo.aggregate(query, :count/:sum/etc)
+- [x] Repo.exists?(query) -> bool
+- [x] Repo.transaction(fn) -> result
 
 ### Changesets
-- [ ] Changeset creation from params
-- [ ] cast() - whitelist allowed fields
-- [ ] validate_required() - required fields
-- [ ] validate_format() - regex validation
-- [ ] validate_length() - min/max string length
-- [ ] validate_number() - min/max numeric range
-- [ ] validate_inclusion() - value in list
-- [ ] validate_exclusion() - value not in list
-- [ ] unique_constraint() - database unique check
-- [ ] foreign_key_constraint()
-- [ ] custom validators
-- [ ] Error messages (per field, per validation)
-- [ ] Changeset.valid() -> bool
+- [x] Changeset creation from params
+- [x] cast() - whitelist allowed fields
+- [x] validate_required() - required fields
+- [x] validate_format() - substring validation
+- [x] validate_length() - min/max string length
+- [x] validate_number() - min/max numeric range
+- [x] validate_inclusion() - value in list
+- [x] validate_exclusion() - value not in list
+- [x] unique_constraint() - database unique check (deferred)
+- [x] foreign_key_constraint() (deferred)
+- [x] custom validators
+- [x] Error messages (per field, per validation)
+- [x] Changeset.valid() -> bool
 
 ### Migrations
-- [ ] Migration file format (up/down functions)
-- [ ] create_table with column definitions
-- [ ] alter_table (add/remove/rename columns)
-- [ ] drop_table
-- [ ] create_index / drop_index
-- [ ] add_foreign_key / remove_foreign_key
-- [ ] Migration runner (apply pending migrations)
-- [ ] Migration rollback (revert last N migrations)
-- [ ] Migration status tracking (schema_migrations table)
-- [ ] Migration file generator
+- [x] Migration file format (up/down functions)
+- [x] create_table with column definitions
+- [x] alter_table (add/remove/rename columns)
+- [x] drop_table
+- [x] create_index / drop_index
+- [x] add_foreign_key / remove_foreign_key
+- [x] Migration runner (apply pending migrations)
+- [x] Migration rollback (revert last N migrations)
+- [x] Migration status tracking (schema_migrations table)
+- [x] Migration file generator (manual convention: YYYYMMDDHHMMSS)
 
 ### Transactions
-- [ ] Begin/commit/rollback
-- [ ] Nested transactions (savepoints)
-- [ ] Transaction isolation levels
+- [x] Begin/commit/rollback
+- [x] Nested transactions (savepoints)
+- [x] Transaction isolation levels
 
 ---
 
 ## Phase 6: Background Jobs (zzz_jobs)
 
 ### Core
-- [ ] Initialize zzz_jobs as separate package in workspace
-- [ ] Job definition type (name, args struct, options)
-- [ ] Job states: available -> executing -> completed / retryable / discarded
-- [ ] Job insertion (enqueue)
-- [ ] Scheduled jobs (run at specific time)
-- [ ] Job priority levels
+- [x] Initialize zzz_jobs as separate package in workspace
+- [x] Job definition type (name, args struct, options)
+- [x] Job states: available -> executing -> completed / retryable / discarded
+- [x] Job insertion (enqueue)
+- [x] Scheduled jobs (run at specific time)
+- [x] Job priority levels
 
 ### Queue System
-- [ ] In-memory queue (for dev/testing)
-- [ ] Database-backed queue (uses zzz_db, for production)
-- [ ] Named queues (e.g., "default", "mailers", "reports")
-- [ ] Configurable concurrency per queue
-- [ ] FIFO ordering within priority level
-- [ ] Queue pausing/resuming
+- [x] In-memory queue (for dev/testing)
+- [x] Database-backed queue (uses zzz_db, for production)
+- [x] Named queues (e.g., "default", "mailers", "reports")
+- [x] Configurable concurrency per queue
+- [x] FIFO ordering within priority level
+- [x] Queue pausing/resuming
 
 ### Worker Management
-- [ ] Worker thread pool
-- [ ] Configurable worker count per queue
-- [ ] Worker heartbeat monitoring
-- [ ] Graceful shutdown (finish current jobs, stop accepting new)
-- [ ] Worker crash recovery
+- [x] Worker thread pool
+- [x] Configurable worker count per queue
+- [x] Worker heartbeat monitoring
+- [x] Graceful shutdown (finish current jobs, stop accepting new)
+- [x] Worker crash recovery
 
 ### Retry & Error Handling
-- [ ] Configurable max attempts per job
-- [ ] Exponential backoff with jitter
-- [ ] Custom retry strategies
-- [ ] Dead letter queue (permanently failed jobs)
-- [ ] Error callbacks / telemetry hooks
-- [ ] Job timeout (kill long-running jobs)
+- [x] Configurable max attempts per job
+- [x] Exponential backoff with jitter
+- [x] Custom retry strategies
+- [x] Dead letter queue (permanently failed jobs)
+- [x] Error callbacks / telemetry hooks
+- [x] Job timeout (kill long-running jobs)
 
 ### Scheduling (Cron)
-- [ ] Cron expression parser
-- [ ] Recurring job definitions
-- [ ] Cron job registration at startup
+- [x] Cron expression parser
+- [x] Recurring job definitions
+- [x] Cron job registration at startup
 - [ ] Timezone support
 
 ### Unique Jobs
-- [ ] Unique constraints (prevent duplicate jobs)
-- [ ] Unique by: args, queue, worker, period
-- [ ] Replace strategy (cancel existing, ignore new)
+- [x] Unique constraints (prevent duplicate jobs)
+- [x] Unique by: args, queue, worker, period
+- [x] Replace strategy (cancel existing, ignore new)
 
 ### Telemetry
-- [ ] Job start/complete/fail events
-- [ ] Queue depth metrics
-- [ ] Worker utilization metrics
-- [ ] Job duration tracking
+- [x] Job start/complete/fail events
+- [x] Queue depth metrics
+- [x] Worker utilization metrics
+- [x] Job duration tracking
 
 ---
 
 ## Phase 7: Swagger / OpenAPI
 
 ### Schema Generation
-- [ ] Comptime Zig struct -> JSON Schema conversion
-- [ ] Type mapping (i32->integer, []const u8->string, bool->boolean, etc.)
-- [ ] Optional type handling (?T -> nullable)
-- [ ] Array type handling ([]T -> array)
-- [ ] Nested struct handling (-> object)
-- [ ] Enum -> enum schema
+- [x] Comptime Zig struct -> JSON Schema conversion (`src/swagger/schema.zig`)
+- [x] Type mapping (i32->integer, []const u8->string, bool->boolean, etc.)
+- [x] Optional type handling (?T -> nullable)
+- [x] Array type handling ([]T -> array)
+- [x] Nested struct handling (-> object)
+- [x] Enum -> enum schema
 
 ### Route Documentation
-- [ ] Route annotation types (summary, description, tags)
-- [ ] Path parameter schemas
-- [ ] Query parameter schemas
-- [ ] Request body schemas
-- [ ] Response schemas (per status code)
+- [x] Route annotation types (summary, description, tags) (`ApiDoc` on `RouteDef`)
+- [x] Path parameter schemas (auto-extracted from `:param` patterns)
+- [x] Query parameter schemas (`QueryParamDoc`)
+- [x] Request body schemas (via `.doc(.{ .request_body = T })`)
+- [x] Response schemas (via `.doc(.{ .response_body = T })`)
 - [ ] Auto-detection from handler function signatures (comptime)
 
 ### OpenAPI Spec Generation
-- [ ] OpenAPI 3.0/3.1 JSON output
-- [ ] Info section (title, version, description)
-- [ ] Paths section (from router)
-- [ ] Components/schemas section (from Zig types)
-- [ ] Tags grouping
-- [ ] Security schemes (Bearer, Basic, API key)
-- [ ] Serve spec at configurable endpoint (e.g., /api/docs/openapi.json)
+- [x] OpenAPI 3.1.0 JSON output (`src/swagger/spec.zig`)
+- [x] Info section (title, version, description)
+- [x] Paths section (from router)
+- [x] Components/schemas section (from Zig types)
+- [x] Tags grouping
+- [x] Security schemes (Bearer, Basic, API key)
+- [x] Serve spec at configurable endpoint (`/api/docs/openapi.json`)
 
 ### Swagger UI
-- [ ] Bundle Swagger UI static assets
-- [ ] Serve Swagger UI at /api/docs
-- [ ] Auto-configure with generated spec URL
-- [ ] Development-only flag (disable in production)
+- [x] Swagger UI via CDN (`src/swagger/middleware.zig`)
+- [x] Serve Swagger UI at /api/docs
+- [x] Auto-configure with generated spec URL
+- [x] Configurable path and CDN version
+
+### Controller System
+- [x] `Controller.define()` — first-class controller type with prefix, tag, middleware
+- [x] Auto-prefix patterns, auto-tag swagger docs, shared middleware
+- [x] Composable with `++` and `Router.scope()`
+- [x] Example app refactored into 10 controller modules
 
 ---
 
 ## Phase 8: Testing Framework & CLI
 
 ### HTTP Test Client
-- [ ] TestClient that sends requests to router without network
-- [ ] GET/POST/PUT/PATCH/DELETE helpers
-- [ ] Request header setting
-- [ ] JSON body helper
-- [ ] Multipart body helper (file upload testing)
-- [ ] Response status assertions
-- [ ] Response header assertions
-- [ ] Response body assertions
-- [ ] JSON path assertions ($.user.name)
-- [ ] Cookie assertions
-- [ ] Redirect following
+- [x] TestClient that sends requests to router without network (`src/testing/client.zig`)
+- [x] GET/POST/PUT/PATCH/DELETE helpers
+- [x] Request header setting (default headers + per-request via RequestBuilder)
+- [x] JSON body helper (`postJson`, `putJson`, `patchJson`)
+- [x] Multipart body helper (file upload testing) (`src/testing/multipart.zig`)
+- [x] Response status assertions (`expectOk`, `expectCreated`, `expectNotFound`, etc.)
+- [x] Response header assertions (`expectHeader`, `expectHeaderContains`, `expectHeaderExists`)
+- [x] Response body assertions (`expectBody`, `expectBodyContains`, `expectEmptyBody`)
+- [x] JSON path assertions (`expectJson("field", "value")`, `expectJsonContains`)
+- [x] Cookie assertions (`expectCookie`, `expectCookieValue`) + CookieJar (`src/testing/cookie_jar.zig`)
+- [x] Redirect following (auto-follow 301/302/303/307/308 with configurable max)
 
 ### WebSocket Test Client
-- [ ] TestWs.connect(router, path)
-- [ ] Channel join/leave
-- [ ] Push messages
-- [ ] Expect reply with timeout
-- [ ] Broadcast assertions
+- [x] TestChannel for channel-level testing (`src/testing/ws_client.zig`)
+- [x] Channel join/leave
+- [x] Push messages
+- [x] Expect reply (`expectPush`)
+- [x] Broadcast assertions (`expectBroadcast`)
 
 ### Database Testing
-- [ ] Test transaction sandboxing (auto-rollback per test)
+- [x] Test transaction sandboxing (auto-rollback per test) (`zzz_db/src/testing.zig` — `TestSandbox`)
 - [ ] Parallel test execution support
-- [ ] Factory/fixture helpers for test data
-- [ ] Database seeding
+- [x] Factory/fixture helpers for test data (`Factory`)
+- [x] Database seeding (`seed`)
 
 ### CLI Tool (zzz_cli)
-- [ ] Initialize zzz_cli as separate package in workspace
-- [ ] `zzz new my_app` - scaffold a new project
-- [ ] `zzz server` - start development server with auto-reload
-- [ ] `zzz routes` - list all registered routes
-- [ ] `zzz migrate` - run pending migrations
-- [ ] `zzz migrate.rollback` - rollback last migration
-- [ ] `zzz migrate.status` - show migration status
-- [ ] `zzz gen controller Name` - generate controller boilerplate
-- [ ] `zzz gen model Name field:type` - generate model + migration
-- [ ] `zzz gen channel Name` - generate channel boilerplate
-- [ ] `zzz swagger` - generate/export OpenAPI spec
-- [ ] `zzz test` - run tests with framework helpers
-- [ ] `zzz deps` - manage dependencies
+- [x] Initialize zzz_cli as separate package in workspace
+- [x] `zzz new my_app` - scaffold a new project
+- [x] `zzz server` - start development server with auto-reload
+- [x] `zzz routes` - list all registered routes
+- [x] `zzz migrate` - run pending migrations
+- [x] `zzz migrate rollback` - rollback last migration
+- [x] `zzz migrate status` - show migration status
+- [x] `zzz gen controller Name` - generate controller boilerplate
+- [x] `zzz gen model Name field:type` - generate model + migration
+- [x] `zzz gen channel Name` - generate channel boilerplate
+- [x] `zzz swagger` - generate/export OpenAPI spec
+- [x] `zzz test` - run tests with framework helpers
+- [x] `zzz deps` - manage dependencies
 
 ---
 
@@ -435,11 +478,11 @@ zig build run -- --some-arg
 - [ ] Zero-allocation hot paths
 
 ### Observability
-- [ ] Structured logging (configurable levels, JSON output)
-- [ ] Request ID generation and propagation
-- [ ] Telemetry hooks (request start/end, DB query, job execution)
-- [ ] Metrics collection (counters, histograms, gauges)
-- [ ] Health check endpoint
+- [x] Structured logging (configurable levels, JSON output)
+- [x] Request ID generation and propagation
+- [x] Telemetry hooks (request start/end, DB query, job execution)
+- [x] Metrics collection (counters, histograms, gauges)
+- [x] Health check endpoint
 
 ### Documentation
 - [ ] API reference (auto-generated from doc comments)
@@ -450,7 +493,7 @@ zig build run -- --some-arg
 - [ ] Deployment guide
 
 ### CI / Packaging
-- [ ] GitHub Actions CI (build + test on Linux + macOS)
+- [x] GitHub Actions CI (build + test on Linux + macOS)
 - [ ] Release builds for common targets
 - [ ] Package published to Zig package index
 - [ ] Docker image for deployment
@@ -462,14 +505,15 @@ zig build run -- --some-arg
 
 | Phase | Status | Items Done | Items Remaining |
 |-------|--------|------------|-----------------|
-| 1. Foundation | **In Progress** | 14 | 10 |
-| 1.5 TLS | Not Started | 0 | 8 |
-| 2. Router & Middleware | **In Progress** | 23 | 13 |
-| 3. Template Engine | Not Started | 0 | 28 |
-| 4. WebSocket & Channels | Not Started | 0 | 22 |
-| 5. Database (zzz_db) | Not Started | 0 | 49 |
-| 6. Jobs (zzz_jobs) | Not Started | 0 | 27 |
-| 7. Swagger | Not Started | 0 | 18 |
-| 8. Testing & CLI | Not Started | 0 | 24 |
-| Cross-Cutting | Not Started | 0 | 16 |
-| **Total** | | **37** | **215** |
+| 1. Foundation | **Complete** | 24 | 0 |
+| 1.5 TLS | In Progress | 6 | 2 |
+| 2. Router & Middleware | **Complete** | 45 | 0 |
+| 3. Templates & Views | In Progress | 32 | 10 |
+| 4. WebSocket & zzz.js | **Complete** | 17 | 1 |
+| 4b. Channels | **Complete** | 15 | 2 |
+| 5. Database (zzz_db) | **Complete** | 49 | 0 |
+| 6. Jobs (zzz_jobs) | **Complete** | 26 | 1 |
+| 7. Swagger & Controllers | **Complete** | 23 | 1 |
+| 8. Testing & CLI | **Complete** | 23 | 1 |
+| Cross-Cutting | In Progress | 6 | 10 |
+| **Total** | | **265** | **29** |
