@@ -67,6 +67,25 @@ pub fn build(b: *std.Build) void {
         run_cmd.addArgs(args);
     }
 
+    // ── Shared zzz_db module for benchmarks ────────────────────────────
+    const is_macos = target.result.os.tag == .macos;
+
+    const db_options = b.addOptions();
+    db_options.addOption(bool, "sqlite_enabled", true);
+    db_options.addOption(bool, "postgres_enabled", false);
+
+    const zzz_db_mod = b.createModule(.{
+        .root_source_file = .{ .cwd_relative = "../zzz_db/src/root.zig" },
+        .target = target,
+    });
+    zzz_db_mod.addImport("db_options", db_options.createModule());
+    zzz_db_mod.linkSystemLibrary("sqlite3", .{});
+    zzz_db_mod.link_libc = true;
+    if (is_macos) {
+        zzz_db_mod.addSystemIncludePath(.{ .cwd_relative = "/opt/homebrew/opt/sqlite/include" });
+        zzz_db_mod.addLibraryPath(.{ .cwd_relative = "/opt/homebrew/opt/sqlite/lib" });
+    }
+
     // ── Benchmark server ────────────────────────────────────────────────
     const bench_exe = b.addExecutable(.{
         .name = "zzz-bench",
@@ -76,12 +95,46 @@ pub fn build(b: *std.Build) void {
             .optimize = .ReleaseFast,
             .imports = &.{
                 .{ .name = "zzz", .module = mod },
+                .{ .name = "zzz_db", .module = zzz_db_mod },
             },
         }),
     });
-    b.installArtifact(bench_exe);
+    bench_exe.root_module.linkSystemLibrary("sqlite3", .{});
+    bench_exe.root_module.link_libc = true;
+    if (is_macos) {
+        bench_exe.root_module.addSystemIncludePath(.{ .cwd_relative = "/opt/homebrew/opt/sqlite/include" });
+        bench_exe.root_module.addLibraryPath(.{ .cwd_relative = "/opt/homebrew/opt/sqlite/lib" });
+    }
+    const install_bench = b.addInstallArtifact(bench_exe, .{});
     const bench_step = b.step("bench", "Build benchmark server (ReleaseFast)");
-    bench_step.dependOn(&bench_exe.step);
+    bench_step.dependOn(&install_bench.step);
+
+    // ── SQLite benchmark (standalone) ───────────────────────────────────
+    const bench_sqlite_exe = b.addExecutable(.{
+        .name = "zzz-bench-sqlite",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("bench/bench_sqlite.zig"),
+            .target = target,
+            .optimize = .ReleaseFast,
+            .imports = &.{
+                .{ .name = "zzz_db", .module = zzz_db_mod },
+            },
+        }),
+    });
+    bench_sqlite_exe.root_module.linkSystemLibrary("sqlite3", .{});
+    bench_sqlite_exe.root_module.link_libc = true;
+    if (is_macos) {
+        bench_sqlite_exe.root_module.addSystemIncludePath(.{ .cwd_relative = "/opt/homebrew/opt/sqlite/include" });
+        bench_sqlite_exe.root_module.addLibraryPath(.{ .cwd_relative = "/opt/homebrew/opt/sqlite/lib" });
+    }
+    const install_bench_sqlite = b.addInstallArtifact(bench_sqlite_exe, .{});
+
+    const bench_sqlite_step = b.step("bench-sqlite", "Build and run SQLite benchmark");
+    const run_bench_sqlite = b.addRunArtifact(bench_sqlite_exe);
+    bench_sqlite_step.dependOn(&run_bench_sqlite.step);
+
+    // Also make `zig build bench` install the sqlite bench binary
+    bench_step.dependOn(&install_bench_sqlite.step);
 
     // ── Parallel test execution ─────────────────────────────────────────
     // Split into independent test compilations so the build system can

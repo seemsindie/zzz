@@ -46,6 +46,7 @@ cleanup() {
         kill "$SERVER_PID" 2>/dev/null || true
         wait "$SERVER_PID" 2>/dev/null || true
     fi
+    rm -f /tmp/zzz-bench.db /tmp/zzz-bench.db-wal /tmp/zzz-bench.db-shm
 }
 trap cleanup EXIT
 
@@ -84,7 +85,18 @@ run_bench() {
 run_bench "Plaintext (text/plain)" "/plaintext"
 run_bench "JSON (application/json)" "/json"
 run_bench "Path Params (routing overhead)" "/users/42"
+run_bench "DB Read (SQLite PK lookup)" "/db"
+run_bench "DB Insert (SQLite INSERT)" "/db-insert"
 
 echo "═══════════════════════════════════════════════════════════════"
-echo "  Benchmark complete."
+echo "  HTTP benchmark complete."
+echo "═══════════════════════════════════════════════════════════════"
+
+# ── SQLite benchmark (no wrk/hey needed) ──────────────────────────────
+echo ""
+echo "Running SQLite benchmark..."
+./zig-out/bin/zzz-bench-sqlite
+
+echo "═══════════════════════════════════════════════════════════════"
+echo "  All benchmarks complete."
 echo "═══════════════════════════════════════════════════════════════"
