@@ -70,6 +70,68 @@ pub const RouteDef = struct {
     }
 };
 
+/// Controller configuration for grouping related routes.
+pub const ControllerConfig = struct {
+    /// URL prefix prepended to all routes (e.g. "/api/users").
+    prefix: []const u8 = "",
+    /// Swagger tag auto-applied to all documented routes.
+    tag: []const u8 = "",
+    /// Middleware applied to all routes in this controller.
+    middleware: []const HandlerFn = &.{},
+};
+
+/// A Controller groups related routes under a shared prefix, tag, and middleware.
+/// Returns a type with a `routes` field containing the expanded `[]const RouteDef`.
+///
+/// Usage:
+///   pub const ctrl = Controller.define(.{
+///       .prefix = "/api/users",
+///       .tag = "Users",
+///   }, &.{
+///       Router.get("/", listUsers).doc(.{ .summary = "List users" }),
+///       Router.get("/:id", getUser).doc(.{ .summary = "Get user" }),
+///       Router.post("/", createUser).doc(.{ .summary = "Create user" }),
+///   });
+///   // ctrl.routes is []const RouteDef with prefixed patterns and auto-tagged docs
+pub const Controller = struct {
+    pub fn define(comptime config: ControllerConfig, comptime defs: []const RouteDef) type {
+        return struct {
+            pub const prefix = config.prefix;
+            pub const tag = config.tag;
+            pub const routes: []const RouteDef = buildRoutes(config, defs);
+        };
+    }
+
+    fn buildRoutes(comptime config: ControllerConfig, comptime defs: []const RouteDef) []const RouteDef {
+        comptime {
+            var result: [defs.len]RouteDef = undefined;
+            for (defs, 0..) |r, i| {
+                var api_doc = r.api_doc;
+                // Auto-apply tag if controller has one and route's doc has no tag
+                if (config.tag.len > 0) {
+                    if (api_doc) |d| {
+                        if (d.tag.len == 0) {
+                            var updated = d;
+                            updated.tag = config.tag;
+                            api_doc = updated;
+                        }
+                    }
+                }
+                result[i] = .{
+                    .method = r.method,
+                    .pattern = config.prefix ++ r.pattern,
+                    .handler = r.handler,
+                    .middleware = config.middleware ++ r.middleware,
+                    .name = r.name,
+                    .api_doc = api_doc,
+                };
+            }
+            const final = result;
+            return &final;
+        }
+    }
+};
+
 /// Router configuration.
 pub const RouterConfig = struct {
     middleware: []const HandlerFn = &.{},

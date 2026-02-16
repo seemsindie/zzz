@@ -23,6 +23,8 @@ pub const parser = @import("core/http/parser.zig");
 // Router & Middleware
 pub const Router = @import("router/router.zig").Router;
 pub const RouteDef = @import("router/router.zig").RouteDef;
+pub const Controller = @import("router/router.zig").Controller;
+pub const ControllerConfig = @import("router/router.zig").ControllerConfig;
 pub const Context = @import("middleware/context.zig").Context;
 pub const HandlerFn = @import("middleware/context.zig").HandlerFn;
 pub const Params = @import("middleware/context.zig").Params;
