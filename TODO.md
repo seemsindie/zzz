@@ -497,8 +497,8 @@ _(Moved to Phase 9: Release Preparation)_
 ### Version & Tagging
 - [x] Bump zzz version from 0.0.0 to 0.1.0 in build.zig.zon
 - [x] Align all package versions to 0.1.0 (zzz, zzz_db, zzz_jobs, zzz_cli)
-- [ ] Create git tags (v0.1.0) in all repositories
-- [ ] Create GitHub Releases with release notes for each repo
+- [x] Create git tags (v0.1.0) in all repositories
+- [x] Create GitHub Releases with release notes for each repo
 - [x] CHANGELOG.md for each package (initial release)
 
 ### README & Project Docs
@@ -528,19 +528,19 @@ _(Moved to Phase 9: Release Preparation)_
 
 ### CLI Distribution
 - [ ] Shell installer script (`curl -fsSL .../install.sh | sh`)
-- [ ] GitHub Releases with prebuilt binaries (Linux x86_64, macOS arm64, macOS x86_64)
-- [ ] Release CI workflow (build binaries on tag push, attach to GitHub Release)
+- [x] GitHub Releases with prebuilt binaries (Linux x86_64, macOS arm64, macOS x86_64)
+- [x] Release CI workflow (build binaries on tag push, attach to GitHub Release)
 - [ ] Homebrew tap repository (homebrew-zzz)
 - [ ] Homebrew formula for zzz CLI
 - [x] Install instructions in CLI README
 
 ### CI / Packaging
 - [x] GitHub Actions CI (build + test on Linux + macOS)
-- [ ] Release builds for common targets
+- [x] Release builds for common targets
 - [ ] Package published to Zig package index
-- [ ] Docker image for deployment
-- [ ] Example docker-compose with PostgreSQL
-- [ ] CI workflows for zzz_cli and example_app (build-only)
+- [x] Docker image for deployment (zzz_cli + example_app Dockerfiles)
+- [x] Example docker-compose with PostgreSQL
+- [x] CI workflows for zzz_cli and example_app (build-only)
 
 ### Package Publishing
 - [ ] Convert local path dependencies to package references (zzz_jobs -> zzz_db)
@@ -563,6 +563,6 @@ _(Moved to Phase 9: Release Preparation)_
 | 6. Jobs (zzz_jobs) | **Complete** | 26 | 1 |
 | 7. Swagger & Controllers | **Complete** | 23 | 1 |
 | 8. Testing & CLI | **Complete** | 23 | 1 |
-| 9. Release Prep (v0.1.0) | In Progress | 13 | 24 |
+| 9. Release Prep (v0.1.0) | In Progress | 20 | 17 |
 | Cross-Cutting | In Progress | 6 | 5 |
-| **Total** | | **278** | **48** |
+| **Total** | | **285** | **41** |
