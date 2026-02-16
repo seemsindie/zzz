@@ -527,7 +527,7 @@ _(Moved to Phase 9: Release Preparation)_
 - [ ] Deploy docs site (GitHub Pages or similar)
 
 ### CLI Distribution
-- [ ] Shell installer script (`curl -fsSL .../install.sh | sh`)
+- [x] Shell installer script (`curl -fsSL https://zzz.seemsindie.com/install.sh | sh`)
 - [x] GitHub Releases with prebuilt binaries (Linux x86_64, macOS arm64, macOS x86_64)
 - [x] Release CI workflow (build binaries on tag push, attach to GitHub Release)
 - [ ] Homebrew tap repository (homebrew-zzz)
@@ -563,6 +563,6 @@ _(Moved to Phase 9: Release Preparation)_
 | 6. Jobs (zzz_jobs) | **Complete** | 26 | 1 |
 | 7. Swagger & Controllers | **Complete** | 23 | 1 |
 | 8. Testing & CLI | **Complete** | 23 | 1 |
-| 9. Release Prep (v0.1.0) | In Progress | 20 | 17 |
+| 9. Release Prep (v0.1.0) | In Progress | 21 | 16 |
 | Cross-Cutting | In Progress | 6 | 5 |
-| **Total** | | **285** | **41** |
+| **Total** | | **286** | **40** |
