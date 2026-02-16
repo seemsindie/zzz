@@ -458,6 +458,7 @@ zig build run -- --some-arg
 - [x] Initialize zzz_cli as separate package in workspace
 - [x] `zzz new my_app` - scaffold a new project
 - [x] `zzz server` - start development server with auto-reload
+- [ ] `zzz server` - file watching with swatcher (watch src/ + templates/, rebuild on change)
 - [x] `zzz routes` - list all registered routes
 - [x] `zzz migrate` - run pending migrations
 - [x] `zzz migrate rollback` - rollback last migration
@@ -479,6 +480,14 @@ zig build run -- --some-arg
 - [ ] Memory usage profiling
 - [ ] Connection pooling optimization
 - [ ] Zero-allocation hot paths
+
+### Build System — Vendored Dependencies
+- [ ] Clone and build SQLite from source instead of linkSystemLibrary("sqlite3")
+- [ ] Clone and build libpq from source instead of linkSystemLibrary("pq")
+- [ ] Clone and build OpenSSL from source instead of linkSystemLibrary("ssl"/"crypto")
+- [ ] Clone swatcher from source for zzz_cli file watching
+- [ ] Remove all Homebrew/system include/library path hardcoding from build.zig files
+- [ ] All deps self-contained — `zig build` works on a fresh machine with no system libraries
 
 ### Observability
 - [x] Structured logging (configurable levels, JSON output)
@@ -679,7 +688,7 @@ _(Moved to Phase 9: Release Preparation)_
 - [ ] CSS/JS minification (shell out to esbuild or lightningcss)
 - [ ] `zig build assets` step for production asset compilation
 - [ ] Source map support for development
-- [ ] Auto-rebuild in dev mode (watch file changes)
+- [ ] Auto-rebuild in dev mode (watch file changes, use swatcher)
 - [ ] Bundle multiple files into one (basic concatenation)
 - [ ] Configurable asset paths (input dir, output dir)
 
