@@ -1,5 +1,6 @@
 const std = @import("std");
 const RouteDef = @import("../router/router.zig").RouteDef;
+const SecurityScheme = @import("../router/router.zig").SecurityScheme;
 const schema_mod = @import("schema.zig");
 const jsonSchema = schema_mod.jsonSchema;
 const typeBaseName = schema_mod.typeBaseName;
@@ -11,13 +12,14 @@ pub const SpecConfig = struct {
     description: []const u8 = "",
     version: []const u8 = "1.0.0",
     server_url: []const u8 = "/",
+    security_schemes: []const SecurityScheme = &.{},
 };
 
 /// Generate a complete OpenAPI 3.1.0 JSON spec from annotated routes at compile time.
 /// Only routes with `.doc()` annotations are included.
 pub fn generateSpec(comptime config: SpecConfig, comptime routes: []const RouteDef) []const u8 {
     comptime {
-        @setEvalBranchQuota(100_000);
+        @setEvalBranchQuota(200_000);
         var result: []const u8 = "{\"openapi\":\"3.1.0\",\"info\":{\"title\":\"" ++
             escapeJsonString(config.title) ++ "\"";
 
@@ -65,19 +67,37 @@ pub fn generateSpec(comptime config: SpecConfig, comptime routes: []const RouteD
 
         result = result ++ "}";
 
-        // Components/schemas
+        // Components (schemas + securitySchemes)
         const schema_types = collectSchemaTypes(doc_routes);
-        if (schema_types.len > 0) {
-            result = result ++ ",\"components\":{\"schemas\":{";
-            var schema_first = true;
-            for (schema_types) |st| {
-                if (!schema_first) {
+        const has_schemas = schema_types.len > 0;
+        const has_security_schemes = config.security_schemes.len > 0;
+
+        if (has_schemas or has_security_schemes) {
+            result = result ++ ",\"components\":{";
+            var components_first = true;
+
+            if (has_schemas) {
+                result = result ++ "\"schemas\":{";
+                var schema_first = true;
+                for (schema_types) |st| {
+                    if (!schema_first) {
+                        result = result ++ ",";
+                    }
+                    result = result ++ "\"" ++ st.name ++ "\":" ++ st.schema;
+                    schema_first = false;
+                }
+                result = result ++ "}";
+                components_first = false;
+            }
+
+            if (has_security_schemes) {
+                if (!components_first) {
                     result = result ++ ",";
                 }
-                result = result ++ "\"" ++ st.name ++ "\":" ++ st.schema;
-                schema_first = false;
+                result = result ++ "\"securitySchemes\":{" ++ generateSecuritySchemes(config.security_schemes) ++ "}";
             }
-            result = result ++ "}}";
+
+            result = result ++ "}";
         }
 
         result = result ++ "}";
@@ -307,7 +327,80 @@ fn generateOperation(comptime r: RouteDef) []const u8 {
         }
         result = result ++ "}}";
 
+        // Per-operation security
+        if (api_doc.security.len > 0) {
+            result = result ++ ",\"security\":[" ++ generateOperationSecurity(api_doc.security) ++ "]";
+        }
+
         result = result ++ "}";
+        return result;
+    }
+}
+
+/// Generate the contents of the "securitySchemes" object.
+fn generateSecuritySchemes(comptime schemes: []const SecurityScheme) []const u8 {
+    comptime {
+        var result: []const u8 = "";
+        var first = true;
+
+        for (schemes) |s| {
+            if (!first) {
+                result = result ++ ",";
+            }
+            result = result ++ "\"" ++ escapeJsonString(s.name) ++ "\":{";
+
+            result = result ++ "\"type\":\"" ++ switch (s.type) {
+                .http => "http",
+                .apiKey => "apiKey",
+                .openIdConnect => "openIdConnect",
+            } ++ "\"";
+
+            if (s.scheme) |scheme| {
+                result = result ++ ",\"scheme\":\"" ++ escapeJsonString(scheme) ++ "\"";
+            }
+
+            if (s.bearer_format) |bf| {
+                result = result ++ ",\"bearerFormat\":\"" ++ escapeJsonString(bf) ++ "\"";
+            }
+
+            if (s.in) |in_val| {
+                result = result ++ ",\"in\":\"" ++ switch (in_val) {
+                    .header => "header",
+                    .query => "query",
+                    .cookie => "cookie",
+                } ++ "\"";
+            }
+
+            if (s.param_name) |pn| {
+                result = result ++ ",\"name\":\"" ++ escapeJsonString(pn) ++ "\"";
+            }
+
+            if (s.description.len > 0) {
+                result = result ++ ",\"description\":\"" ++ escapeJsonString(s.description) ++ "\"";
+            }
+
+            result = result ++ "}";
+            first = false;
+        }
+
+        return result;
+    }
+}
+
+/// Generate the contents of a per-operation "security" array.
+fn generateOperationSecurity(comptime names: []const []const u8) []const u8 {
+    comptime {
+        var result: []const u8 = "";
+        var first = true;
+
+        for (names) |name| {
+            if (!first) {
+                result = result ++ ",";
+            }
+            result = result ++ "{\"" ++ escapeJsonString(name) ++ "\":[]}";
+            first = false;
+        }
+
         return result;
     }
 }
@@ -404,4 +497,71 @@ test "generateSpec: path params converted" {
     });
     try std.testing.expect(std.mem.indexOf(u8, spec, "\"/api/users/{id}\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, spec, "\"in\":\"path\"") != null);
+}
+
+test "generateSpec: securitySchemes appear when configured" {
+    const Context = @import("../middleware/context.zig").Context;
+    const H = struct {
+        fn handle(_: *Context) anyerror!void {}
+    };
+
+    const spec = comptime generateSpec(.{
+        .title = "Secure API",
+        .security_schemes = &.{
+            .{ .name = "bearerAuth", .type = .http, .scheme = "bearer", .bearer_format = "JWT" },
+            .{ .name = "apiKeyAuth", .type = .apiKey, .in = .header, .param_name = "X-API-Key" },
+        },
+    }, &[_]RouteDef{
+        .{
+            .method = .GET,
+            .pattern = "/api/status",
+            .handler = &H.handle,
+            .api_doc = .{ .summary = "Status" },
+        },
+    });
+    try std.testing.expect(std.mem.indexOf(u8, spec, "\"securitySchemes\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, spec, "\"bearerAuth\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, spec, "\"scheme\":\"bearer\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, spec, "\"bearerFormat\":\"JWT\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, spec, "\"apiKeyAuth\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, spec, "\"in\":\"header\"") != null);
+}
+
+test "generateSpec: per-operation security array" {
+    const Context = @import("../middleware/context.zig").Context;
+    const H = struct {
+        fn handle(_: *Context) anyerror!void {}
+    };
+
+    const spec = comptime generateSpec(.{
+        .security_schemes = &.{
+            .{ .name = "bearerAuth", .type = .http, .scheme = "bearer" },
+        },
+    }, &[_]RouteDef{
+        .{
+            .method = .GET,
+            .pattern = "/api/me",
+            .handler = &H.handle,
+            .api_doc = .{ .summary = "Current user", .security = &.{"bearerAuth"} },
+        },
+    });
+    try std.testing.expect(std.mem.indexOf(u8, spec, "\"security\":[{\"bearerAuth\":[]}]") != null);
+}
+
+test "generateSpec: no security output when not configured" {
+    const Context = @import("../middleware/context.zig").Context;
+    const H = struct {
+        fn handle(_: *Context) anyerror!void {}
+    };
+
+    const spec = comptime generateSpec(.{}, &[_]RouteDef{
+        .{
+            .method = .GET,
+            .pattern = "/api/public",
+            .handler = &H.handle,
+            .api_doc = .{ .summary = "Public endpoint" },
+        },
+    });
+    try std.testing.expect(std.mem.indexOf(u8, spec, "securitySchemes") == null);
+    try std.testing.expect(std.mem.indexOf(u8, spec, "\"security\"") == null);
 }

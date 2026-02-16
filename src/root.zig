@@ -106,8 +106,29 @@ pub const swagger = @import("swagger/root.zig");
 pub const ApiDoc = swagger.ApiDoc;
 pub const QueryParamDoc = swagger.QueryParamDoc;
 
+// Observability Middleware
+pub const structuredLogger = @import("middleware/structured_logger.zig").structuredLogger;
+pub const StructuredLoggerConfig = @import("middleware/structured_logger.zig").StructuredLoggerConfig;
+pub const LogLevel = @import("middleware/structured_logger.zig").LogLevel;
+pub const LogFormat = @import("middleware/structured_logger.zig").LogFormat;
+pub const requestId = @import("middleware/request_id.zig").requestId;
+pub const RequestIdConfig = @import("middleware/request_id.zig").RequestIdConfig;
+pub const telemetryMiddleware = @import("middleware/telemetry.zig").telemetry;
+pub const TelemetryConfig = @import("middleware/telemetry.zig").TelemetryConfig;
+pub const TelemetryEvent = @import("middleware/telemetry.zig").TelemetryEvent;
+pub const metricsMiddleware = @import("middleware/metrics.zig").metrics;
+pub const MetricsConfig = @import("middleware/metrics.zig").MetricsConfig;
+pub const healthCheck = @import("middleware/health.zig").health;
+pub const HealthConfig = @import("middleware/health.zig").HealthConfig;
+
+// Security Scheme (for OpenAPI spec)
+pub const SecurityScheme = @import("router/router.zig").SecurityScheme;
+
 // Cookie helpers (re-exported from Context)
 pub const CookieOptions = Context.CookieOptions;
+
+// Testing utilities
+pub const testing = @import("testing/root.zig");
 
 // Re-export Io for convenience
 pub const Io = @import("std").Io;

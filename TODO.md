@@ -406,7 +406,7 @@ zig build run -- --some-arg
 - [x] Paths section (from router)
 - [x] Components/schemas section (from Zig types)
 - [x] Tags grouping
-- [ ] Security schemes (Bearer, Basic, API key)
+- [x] Security schemes (Bearer, Basic, API key)
 - [x] Serve spec at configurable endpoint (`/api/docs/openapi.json`)
 
 ### Swagger UI
@@ -426,45 +426,45 @@ zig build run -- --some-arg
 ## Phase 8: Testing Framework & CLI
 
 ### HTTP Test Client
-- [ ] TestClient that sends requests to router without network
-- [ ] GET/POST/PUT/PATCH/DELETE helpers
-- [ ] Request header setting
-- [ ] JSON body helper
-- [ ] Multipart body helper (file upload testing)
-- [ ] Response status assertions
-- [ ] Response header assertions
-- [ ] Response body assertions
-- [ ] JSON path assertions ($.user.name)
-- [ ] Cookie assertions
-- [ ] Redirect following
+- [x] TestClient that sends requests to router without network (`src/testing/client.zig`)
+- [x] GET/POST/PUT/PATCH/DELETE helpers
+- [x] Request header setting (default headers + per-request via RequestBuilder)
+- [x] JSON body helper (`postJson`, `putJson`, `patchJson`)
+- [x] Multipart body helper (file upload testing) (`src/testing/multipart.zig`)
+- [x] Response status assertions (`expectOk`, `expectCreated`, `expectNotFound`, etc.)
+- [x] Response header assertions (`expectHeader`, `expectHeaderContains`, `expectHeaderExists`)
+- [x] Response body assertions (`expectBody`, `expectBodyContains`, `expectEmptyBody`)
+- [x] JSON path assertions (`expectJson("field", "value")`, `expectJsonContains`)
+- [x] Cookie assertions (`expectCookie`, `expectCookieValue`) + CookieJar (`src/testing/cookie_jar.zig`)
+- [x] Redirect following (auto-follow 301/302/303/307/308 with configurable max)
 
 ### WebSocket Test Client
-- [ ] TestWs.connect(router, path)
-- [ ] Channel join/leave
-- [ ] Push messages
-- [ ] Expect reply with timeout
-- [ ] Broadcast assertions
+- [x] TestChannel for channel-level testing (`src/testing/ws_client.zig`)
+- [x] Channel join/leave
+- [x] Push messages
+- [x] Expect reply (`expectPush`)
+- [x] Broadcast assertions (`expectBroadcast`)
 
 ### Database Testing
-- [ ] Test transaction sandboxing (auto-rollback per test)
+- [x] Test transaction sandboxing (auto-rollback per test) (`zzz_db/src/testing.zig` — `TestSandbox`)
 - [ ] Parallel test execution support
-- [ ] Factory/fixture helpers for test data
-- [ ] Database seeding
+- [x] Factory/fixture helpers for test data (`Factory`)
+- [x] Database seeding (`seed`)
 
 ### CLI Tool (zzz_cli)
-- [ ] Initialize zzz_cli as separate package in workspace
-- [ ] `zzz new my_app` - scaffold a new project
-- [ ] `zzz server` - start development server with auto-reload
-- [ ] `zzz routes` - list all registered routes
-- [ ] `zzz migrate` - run pending migrations
-- [ ] `zzz migrate.rollback` - rollback last migration
-- [ ] `zzz migrate.status` - show migration status
-- [ ] `zzz gen controller Name` - generate controller boilerplate
-- [ ] `zzz gen model Name field:type` - generate model + migration
-- [ ] `zzz gen channel Name` - generate channel boilerplate
-- [ ] `zzz swagger` - generate/export OpenAPI spec
-- [ ] `zzz test` - run tests with framework helpers
-- [ ] `zzz deps` - manage dependencies
+- [x] Initialize zzz_cli as separate package in workspace
+- [x] `zzz new my_app` - scaffold a new project
+- [x] `zzz server` - start development server with auto-reload
+- [x] `zzz routes` - list all registered routes
+- [x] `zzz migrate` - run pending migrations
+- [x] `zzz migrate rollback` - rollback last migration
+- [x] `zzz migrate status` - show migration status
+- [x] `zzz gen controller Name` - generate controller boilerplate
+- [x] `zzz gen model Name field:type` - generate model + migration
+- [x] `zzz gen channel Name` - generate channel boilerplate
+- [x] `zzz swagger` - generate/export OpenAPI spec
+- [x] `zzz test` - run tests with framework helpers
+- [x] `zzz deps` - manage dependencies
 
 ---
 
@@ -478,11 +478,11 @@ zig build run -- --some-arg
 - [ ] Zero-allocation hot paths
 
 ### Observability
-- [ ] Structured logging (configurable levels, JSON output)
-- [ ] Request ID generation and propagation
-- [ ] Telemetry hooks (request start/end, DB query, job execution)
-- [ ] Metrics collection (counters, histograms, gauges)
-- [ ] Health check endpoint
+- [x] Structured logging (configurable levels, JSON output)
+- [x] Request ID generation and propagation
+- [x] Telemetry hooks (request start/end, DB query, job execution)
+- [x] Metrics collection (counters, histograms, gauges)
+- [x] Health check endpoint
 
 ### Documentation
 - [ ] API reference (auto-generated from doc comments)
@@ -493,7 +493,7 @@ zig build run -- --some-arg
 - [ ] Deployment guide
 
 ### CI / Packaging
-- [ ] GitHub Actions CI (build + test on Linux + macOS)
+- [x] GitHub Actions CI (build + test on Linux + macOS)
 - [ ] Release builds for common targets
 - [ ] Package published to Zig package index
 - [ ] Docker image for deployment
@@ -513,7 +513,7 @@ zig build run -- --some-arg
 | 4b. Channels | **Complete** | 15 | 2 |
 | 5. Database (zzz_db) | **Complete** | 49 | 0 |
 | 6. Jobs (zzz_jobs) | **Complete** | 26 | 1 |
-| 7. Swagger & Controllers | **Complete** | 22 | 2 |
-| 8. Testing & CLI | Not Started | 0 | 24 |
-| Cross-Cutting | Not Started | 0 | 16 |
-| **Total** | | **236** | **58** |
+| 7. Swagger & Controllers | **Complete** | 23 | 1 |
+| 8. Testing & CLI | **Complete** | 23 | 1 |
+| Cross-Cutting | In Progress | 6 | 10 |
+| **Total** | | **265** | **29** |

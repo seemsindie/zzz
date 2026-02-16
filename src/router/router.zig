@@ -14,6 +14,20 @@ const WsConfig = ws_middleware.WsConfig;
 const channel_middleware = @import("../middleware/channel.zig");
 const ChannelConfig = channel_middleware.ChannelConfig;
 
+/// Security scheme definition for OpenAPI spec generation.
+pub const SecurityScheme = struct {
+    name: []const u8,
+    type: SecurityType = .http,
+    scheme: ?[]const u8 = null, // "bearer", "basic"
+    bearer_format: ?[]const u8 = null, // "JWT"
+    in: ?ApiKeyIn = null, // for apiKey
+    param_name: ?[]const u8 = null, // for apiKey
+    description: []const u8 = "",
+
+    pub const SecurityType = enum { http, apiKey, openIdConnect };
+    pub const ApiKeyIn = enum { header, query, cookie };
+};
+
 /// Documentation for a query parameter in an API route.
 pub const QueryParamDoc = struct {
     name: []const u8,
@@ -31,6 +45,7 @@ pub const ApiDoc = struct {
     request_body: ?type = null,
     response_body: ?type = null,
     query_params: []const QueryParamDoc = &.{},
+    security: []const []const u8 = &.{},
 };
 
 /// A route definition tuple used in the config DSL.
