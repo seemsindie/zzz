@@ -404,6 +404,60 @@ pub const Router = struct {
 
                 return buf[0..pos];
             }
+
+            /// Look up a named route at runtime and substitute params to build a URL.
+            /// Unlike `buildPath`, this accepts runtime route names via `std.mem.eql`.
+            /// Returns an allocator-owned string, or `null` if the route is not found
+            /// or a required parameter is missing.
+            pub fn urlFor(allocator: Allocator, route_name: []const u8, params: *const Params) ?[]const u8 {
+                inline for (config.routes) |r| {
+                    if (r.name.len > 0 and std.mem.eql(u8, r.name, route_name)) {
+                        return substitutePattern(allocator, r.pattern, params);
+                    }
+                }
+                return null;
+            }
+
+            fn substitutePattern(allocator: Allocator, comptime pattern: []const u8, params: *const Params) ?[]const u8 {
+                const segments = comptime route_mod.compilePattern(pattern);
+
+                if (segments.len == 0) {
+                    return allocator.dupe(u8, "/") catch return null;
+                }
+
+                var buf: [512]u8 = undefined;
+                var pos: usize = 0;
+
+                inline for (segments) |seg| {
+                    switch (seg) {
+                        .static => |lit| {
+                            if (pos + 1 + lit.len > buf.len) return null;
+                            buf[pos] = '/';
+                            pos += 1;
+                            @memcpy(buf[pos..][0..lit.len], lit);
+                            pos += lit.len;
+                        },
+                        .param => |name| {
+                            const value = params.get(name) orelse return null;
+                            if (pos + 1 + value.len > buf.len) return null;
+                            buf[pos] = '/';
+                            pos += 1;
+                            @memcpy(buf[pos..][0..value.len], value);
+                            pos += value.len;
+                        },
+                        .wildcard => |name| {
+                            const value = params.get(name) orelse return null;
+                            if (pos + 1 + value.len > buf.len) return null;
+                            buf[pos] = '/';
+                            pos += 1;
+                            @memcpy(buf[pos..][0..value.len], value);
+                            pos += value.len;
+                        },
+                    }
+                }
+
+                return allocator.dupe(u8, buf[0..pos]) catch return null;
+            }
         };
     }
 };
@@ -1121,4 +1175,87 @@ test "Router.typed response handler executes correctly" {
     const body = resp.body.?;
     try std.testing.expect(std.mem.indexOf(u8, body, "\"status\"") != null);
     try std.testing.expect(std.mem.indexOf(u8, body, "\"ok\"") != null);
+}
+
+test "Router.define urlFor single param" {
+    const H = struct {
+        fn handle(ctx: *Context) !void {
+            ctx.text(.ok, "ok");
+        }
+    };
+
+    const App = Router.define(.{
+        .routes = &.{
+            Router.get("/users/:id", H.handle).named("user_path"),
+            Router.get("/users/:id/posts/:post_id", H.handle).named("user_post"),
+        },
+    });
+
+    var params: Params = .{};
+    params.put("id", "42");
+
+    const url = App.urlFor(std.testing.allocator, "user_path", &params);
+    defer if (url) |u| std.testing.allocator.free(u);
+    try std.testing.expect(url != null);
+    try std.testing.expectEqualStrings("/users/42", url.?);
+}
+
+test "Router.define urlFor multi param" {
+    const H = struct {
+        fn handle(ctx: *Context) !void {
+            ctx.text(.ok, "ok");
+        }
+    };
+
+    const App = Router.define(.{
+        .routes = &.{
+            Router.get("/users/:id/posts/:post_id", H.handle).named("user_post"),
+        },
+    });
+
+    var params: Params = .{};
+    params.put("id", "7");
+    params.put("post_id", "hello");
+
+    const url = App.urlFor(std.testing.allocator, "user_post", &params);
+    defer if (url) |u| std.testing.allocator.free(u);
+    try std.testing.expect(url != null);
+    try std.testing.expectEqualStrings("/users/7/posts/hello", url.?);
+}
+
+test "Router.define urlFor unknown route returns null" {
+    const H = struct {
+        fn handle(ctx: *Context) !void {
+            ctx.text(.ok, "ok");
+        }
+    };
+
+    const App = Router.define(.{
+        .routes = &.{
+            Router.get("/users/:id", H.handle).named("user_path"),
+        },
+    });
+
+    var params: Params = .{};
+    const url = App.urlFor(std.testing.allocator, "nonexistent", &params);
+    try std.testing.expect(url == null);
+}
+
+test "Router.define urlFor missing param returns null" {
+    const H = struct {
+        fn handle(ctx: *Context) !void {
+            ctx.text(.ok, "ok");
+        }
+    };
+
+    const App = Router.define(.{
+        .routes = &.{
+            Router.get("/users/:id", H.handle).named("user_path"),
+        },
+    });
+
+    var params: Params = .{};
+    // No "id" param set
+    const url = App.urlFor(std.testing.allocator, "user_path", &params);
+    try std.testing.expect(url == null);
 }

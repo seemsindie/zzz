@@ -67,6 +67,22 @@ pub fn build(b: *std.Build) void {
         run_cmd.addArgs(args);
     }
 
+    // ── Benchmark server ────────────────────────────────────────────────
+    const bench_exe = b.addExecutable(.{
+        .name = "zzz-bench",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("bench/bench_server.zig"),
+            .target = target,
+            .optimize = .ReleaseFast,
+            .imports = &.{
+                .{ .name = "zzz", .module = mod },
+            },
+        }),
+    });
+    b.installArtifact(bench_exe);
+    const bench_step = b.step("bench", "Build benchmark server (ReleaseFast)");
+    bench_step.dependOn(&bench_exe.step);
+
     // ── Parallel test execution ─────────────────────────────────────────
     // Split into independent test compilations so the build system can
     // compile and run them in parallel (via dependOn).

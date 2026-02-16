@@ -165,13 +165,13 @@ zig build run -- --some-arg
 - [ ] Slot support for components
 
 ### Built-in Helpers (Pipe Syntax)
-- [ ] `{{format_date date "YYYY-MM-DD"}}`
+- [x] `{{created_at | format_date:"YYYY-MM-DD"}}` — pipe syntax with format_date
 - [x] `{{title | truncate:20}}` — pipe syntax with truncate
 - [x] `{{count | pluralize:"item":"items"}}` — pipe syntax with pluralize
 - [x] `{{name | upper}}`, `{{name | lower}}` — case pipes
 - [x] `{{name | default:"N/A"}}` — default pipe
 - [x] Integer rendering: `{{count}}` with integer types
-- [ ] `{{url_for "user_path" id=user.id}}` — needs runtime route registry
+- [x] `App.urlFor(allocator, "user_path", &params)` — runtime URL generation from route names
 - [x] Custom helper registration — built-in pipe system (truncate, upper, lower, default, pluralize)
 
 ### htmx Integration (Built-in)
@@ -367,7 +367,7 @@ zig build run -- --some-arg
 - [x] Cron expression parser
 - [x] Recurring job definitions
 - [x] Cron job registration at startup
-- [ ] Timezone support
+- [x] Timezone support (`matchesWithOffset`, `nextAfterWithOffset`, `initWithTimezone`)
 
 ### Unique Jobs
 - [x] Unique constraints (prevent duplicate jobs)
@@ -471,7 +471,7 @@ zig build run -- --some-arg
 ## Cross-Cutting Concerns
 
 ### Performance
-- [ ] Benchmark suite (requests/sec, latency percentiles)
+- [x] Benchmark suite (`zig build bench` + `bench/run_bench.sh` with wrk/hey)
 - [ ] Compare against other Zig frameworks (http.zig, zap, jetzig)
 - [ ] Memory usage profiling
 - [ ] Connection pooling optimization
@@ -530,8 +530,8 @@ _(Moved to Phase 9: Release Preparation)_
 - [x] Shell installer script (`curl -fsSL https://zzz.seemsindie.com/install.sh | sh`)
 - [x] GitHub Releases with prebuilt binaries (Linux x86_64, macOS arm64, macOS x86_64)
 - [x] Release CI workflow (build binaries on tag push, attach to GitHub Release)
-- [ ] Homebrew tap repository (homebrew-zzz)
-- [ ] Homebrew formula for zzz CLI
+- [x] Homebrew tap repository (homebrew-zzz)
+- [x] Homebrew formula for zzz CLI
 - [x] Install instructions in CLI README
 
 ### CI / Packaging
@@ -556,13 +556,13 @@ _(Moved to Phase 9: Release Preparation)_
 | 1. Foundation | **Complete** | 24 | 0 |
 | 1.5 TLS | In Progress | 6 | 2 |
 | 2. Router & Middleware | **Complete** | 45 | 0 |
-| 3. Templates & Views | In Progress | 32 | 10 |
+| 3. Templates & Views | In Progress | 34 | 8 |
 | 4. WebSocket & zzz.js | **Complete** | 17 | 1 |
 | 4b. Channels | **Complete** | 15 | 2 |
 | 5. Database (zzz_db) | **Complete** | 49 | 0 |
-| 6. Jobs (zzz_jobs) | **Complete** | 26 | 1 |
+| 6. Jobs (zzz_jobs) | **Complete** | 27 | 0 |
 | 7. Swagger & Controllers | **Complete** | 24 | 0 |
 | 8. Testing & CLI | **Complete** | 24 | 0 |
-| 9. Release Prep (v0.1.0) | In Progress | 23 | 14 |
-| Cross-Cutting | In Progress | 6 | 5 |
-| **Total** | | **290** | **36** |
+| 9. Release Prep (v0.1.0) | In Progress | 25 | 12 |
+| Cross-Cutting | In Progress | 7 | 4 |
+| **Total** | | **296** | **30** |

@@ -990,6 +990,115 @@ inline fn renderValue(value: anytype, allocator: Allocator) ![]const u8 {
     @compileError("Template variable must be []const u8 or integer, got " ++ @typeName(T));
 }
 
+// ── Date formatting support ────────────────────────────────────────────
+
+const DateTime = struct {
+    year: u16,
+    month: u4,
+    day: u5,
+    hour: u5,
+    minute: u6,
+    second: u6,
+};
+
+fn timestampToDateTime(ts: i64) DateTime {
+    const epoch = std.time.epoch;
+    const es = epoch.EpochSeconds{ .secs = @intCast(ts) };
+    const day_secs = es.getDaySeconds();
+    const epoch_day = es.getEpochDay();
+    const year_day = epoch_day.calculateYearDay();
+    const month_day = year_day.calculateMonthDay();
+
+    return .{
+        .year = year_day.year,
+        .month = @intFromEnum(month_day.month),
+        .day = month_day.day_index + 1,
+        .hour = day_secs.getHoursIntoDay(),
+        .minute = day_secs.getMinutesIntoHour(),
+        .second = @intCast(@mod(ts, 60)),
+    };
+}
+
+const month_names = [_][]const u8{
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+};
+
+fn formatTimestamp(allocator: Allocator, ts: i64, comptime pattern: []const u8) ![]const u8 {
+    const dt = timestampToDateTime(ts);
+
+    var buf: [64]u8 = undefined;
+    var pos: usize = 0;
+
+    comptime var i: usize = 0;
+    inline while (i < pattern.len) {
+        if (comptime i + 4 <= pattern.len and eql(pattern[i .. i + 4], "YYYY")) {
+            const digits = digitsBuf4(dt.year);
+            if (pos + 4 > buf.len) return error.BufferOverflow;
+            @memcpy(buf[pos..][0..4], &digits);
+            pos += 4;
+            i += 4;
+        } else if (comptime i + 3 <= pattern.len and eql(pattern[i .. i + 3], "MMM")) {
+            const name = month_names[@as(usize, dt.month) - 1];
+            if (pos + 3 > buf.len) return error.BufferOverflow;
+            @memcpy(buf[pos..][0..3], name[0..3]);
+            pos += 3;
+            i += 3;
+        } else if (comptime i + 2 <= pattern.len and eql(pattern[i .. i + 2], "MM")) {
+            const digits = digitsBuf2(dt.month);
+            if (pos + 2 > buf.len) return error.BufferOverflow;
+            @memcpy(buf[pos..][0..2], &digits);
+            pos += 2;
+            i += 2;
+        } else if (comptime i + 2 <= pattern.len and eql(pattern[i .. i + 2], "DD")) {
+            const digits = digitsBuf2(dt.day);
+            if (pos + 2 > buf.len) return error.BufferOverflow;
+            @memcpy(buf[pos..][0..2], &digits);
+            pos += 2;
+            i += 2;
+        } else if (comptime i + 2 <= pattern.len and eql(pattern[i .. i + 2], "HH")) {
+            const digits = digitsBuf2(dt.hour);
+            if (pos + 2 > buf.len) return error.BufferOverflow;
+            @memcpy(buf[pos..][0..2], &digits);
+            pos += 2;
+            i += 2;
+        } else if (comptime i + 2 <= pattern.len and eql(pattern[i .. i + 2], "mm")) {
+            const digits = digitsBuf2(dt.minute);
+            if (pos + 2 > buf.len) return error.BufferOverflow;
+            @memcpy(buf[pos..][0..2], &digits);
+            pos += 2;
+            i += 2;
+        } else if (comptime i + 2 <= pattern.len and eql(pattern[i .. i + 2], "ss")) {
+            const digits = digitsBuf2(dt.second);
+            if (pos + 2 > buf.len) return error.BufferOverflow;
+            @memcpy(buf[pos..][0..2], &digits);
+            pos += 2;
+            i += 2;
+        } else {
+            if (pos + 1 > buf.len) return error.BufferOverflow;
+            buf[pos] = pattern[i];
+            pos += 1;
+            i += 1;
+        }
+    }
+
+    return allocator.dupe(u8, buf[0..pos]);
+}
+
+fn digitsBuf2(val: anytype) [2]u8 {
+    const v: u8 = @intCast(val);
+    return .{ '0' + v / 10, '0' + v % 10 };
+}
+
+fn digitsBuf4(val: u16) [4]u8 {
+    return .{
+        '0' + @as(u8, @intCast(val / 1000)),
+        '0' + @as(u8, @intCast(val % 1000 / 100)),
+        '0' + @as(u8, @intCast(val % 100 / 10)),
+        '0' + @as(u8, @intCast(val % 10)),
+    };
+}
+
 /// Apply a single pipe transformation to the input string at runtime.
 fn applyPipe(allocator: Allocator, input: []const u8, comptime pipe: Segment.Pipe) ![]const u8 {
     if (comptime eql(pipe.name, "truncate")) {
@@ -1034,6 +1143,11 @@ fn applyPipe(allocator: Allocator, input: []const u8, comptime pipe: Segment.Pip
         const count = std.fmt.parseInt(i64, input, 10) catch 0;
         const word = if (count == 1) singular else plural;
         return std.fmt.allocPrint(allocator, "{d} {s}", .{ count, word });
+    }
+
+    if (comptime eql(pipe.name, "format_date")) {
+        const ts = std.fmt.parseInt(i64, input, 10) catch return input;
+        return formatTimestamp(allocator, ts, pipe.arg);
     }
 
     // Unknown pipe — passthrough
@@ -1448,4 +1562,56 @@ test "pipe: HTML escaping with escaped variable" {
     const T = template("{{name | upper}}");
     const result = try T.render(alloc, .{ .name = "<b>" });
     try std.testing.expectEqualStrings("&lt;B&gt;", result);
+}
+
+test "pipe: format_date YYYY-MM-DD" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    // 2023-11-14T12:00:00 UTC = 1699963200
+    const T = template("{{created_at | format_date:\"YYYY-MM-DD\"}}");
+    const result = try T.render(alloc, .{ .created_at = "1699963200" });
+    try std.testing.expectEqualStrings("2023-11-14", result);
+}
+
+test "pipe: format_date YYYY-MM-DD HH:mm:ss" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const T = template("{{created_at | format_date:\"YYYY-MM-DD HH:mm:ss\"}}");
+    const result = try T.render(alloc, .{ .created_at = "1699963200" });
+    try std.testing.expectEqualStrings("2023-11-14 12:00:00", result);
+}
+
+test "pipe: format_date MMM DD, YYYY" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const T = template("{{created_at | format_date:\"MMM DD, YYYY\"}}");
+    const result = try T.render(alloc, .{ .created_at = "1699963200" });
+    try std.testing.expectEqualStrings("Nov 14, 2023", result);
+}
+
+test "pipe: format_date with integer input" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    // Integer is coerced to string by renderValue, then format_date parses it
+    const T = template("{{created_at | format_date:\"YYYY-MM-DD\"}}");
+    const result = try T.render(alloc, .{ .created_at = @as(i64, 1699963200) });
+    try std.testing.expectEqualStrings("2023-11-14", result);
+}
+
+test "pipe: format_date non-numeric passthrough" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const alloc = arena.allocator();
+
+    const T = template("{{val | format_date:\"YYYY-MM-DD\"}}");
+    const result = try T.render(alloc, .{ .val = "not-a-number" });
+    try std.testing.expectEqualStrings("not-a-number", result);
 }
