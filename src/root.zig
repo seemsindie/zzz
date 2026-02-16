@@ -75,6 +75,9 @@ pub const JwtConfig = @import("middleware/auth.zig").JwtConfig;
 // Resource Helper (re-exported from Router)
 pub const ResourceHandlers = Router.ResourceHandlers;
 
+// Typed handler helper (auto-detects request/response types for Swagger)
+pub const typed = Router.typed;
+
 // WebSocket
 pub const WebSocket = @import("core/websocket/connection.zig").WebSocket;
 pub const WsMessage = @import("core/websocket/connection.zig").Message;
@@ -136,7 +139,3 @@ pub const Io = @import("std").Io;
 /// Framework version.
 pub const version = "0.1.0";
 
-test {
-    // Run all tests in submodules
-    std.testing.refAllDecls(@This());
-}

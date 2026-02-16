@@ -398,7 +398,7 @@ zig build run -- --some-arg
 - [x] Query parameter schemas (`QueryParamDoc`)
 - [x] Request body schemas (via `.doc(.{ .request_body = T })`)
 - [x] Response schemas (via `.doc(.{ .response_body = T })`)
-- [ ] Auto-detection from handler function signatures (comptime)
+- [x] Auto-detection from handler function signatures (comptime)
 
 ### OpenAPI Spec Generation
 - [x] OpenAPI 3.1.0 JSON output (`src/swagger/spec.zig`)
@@ -447,7 +447,7 @@ zig build run -- --some-arg
 
 ### Database Testing
 - [x] Test transaction sandboxing (auto-rollback per test) (`zzz_db/src/testing.zig` — `TestSandbox`)
-- [ ] Parallel test execution support
+- [x] Parallel test execution support
 - [x] Factory/fixture helpers for test data (`Factory`)
 - [x] Database seeding (`seed`)
 
@@ -543,8 +543,8 @@ _(Moved to Phase 9: Release Preparation)_
 - [x] CI workflows for zzz_cli and example_app (build-only)
 
 ### Package Publishing
-- [ ] Convert local path dependencies to package references (zzz_jobs -> zzz_db)
-- [ ] Test `zig fetch` from GitHub URLs for each package
+- [x] Convert local path dependencies to package references (zzz_jobs -> zzz_db)
+- [x] Test `zig fetch` from GitHub URLs for each package
 - [ ] Register packages with Zig package index (when available)
 
 ---
@@ -561,8 +561,8 @@ _(Moved to Phase 9: Release Preparation)_
 | 4b. Channels | **Complete** | 15 | 2 |
 | 5. Database (zzz_db) | **Complete** | 49 | 0 |
 | 6. Jobs (zzz_jobs) | **Complete** | 26 | 1 |
-| 7. Swagger & Controllers | **Complete** | 23 | 1 |
-| 8. Testing & CLI | **Complete** | 23 | 1 |
-| 9. Release Prep (v0.1.0) | In Progress | 21 | 16 |
+| 7. Swagger & Controllers | **Complete** | 24 | 0 |
+| 8. Testing & CLI | **Complete** | 24 | 0 |
+| 9. Release Prep (v0.1.0) | In Progress | 23 | 14 |
 | Cross-Cutting | In Progress | 6 | 5 |
-| **Total** | | **286** | **40** |
+| **Total** | | **290** | **36** |
