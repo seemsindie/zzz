@@ -130,6 +130,9 @@ pub const SecurityScheme = @import("router/router.zig").SecurityScheme;
 // Cookie helpers (re-exported from Context)
 pub const CookieOptions = Context.CookieOptions;
 
+// Environment
+pub const Env = @import("env.zig").Env;
+
 // Testing utilities
 pub const testing = @import("testing/root.zig");
 

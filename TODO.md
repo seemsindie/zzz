@@ -295,6 +295,9 @@ zig build run -- --some-arg
 - [x] Repo.aggregate(query, :count/:sum/etc)
 - [x] Repo.exists?(query) -> bool
 - [x] Repo.transaction(fn) -> result
+- [x] Repo.rawAll(T, sql, params) -> []T (raw SQL mapped to structs)
+- [x] Repo.rawOne(T, sql, params) -> ?T (raw SQL, first row)
+- [x] Repo.rawExec(sql, params) -> ExecResult (raw INSERT/UPDATE/DELETE)
 
 ### Changesets
 - [x] Changeset creation from params
@@ -549,6 +552,240 @@ _(Moved to Phase 9: Release Preparation)_
 
 ---
 
+## Phase 10: Configuration & Environment
+
+### .env Support
+- [x] `.env` file parser (key=value, `#` comments, quoted values)
+- [x] Load order: `.env` → `.env.{environment}` → real env vars (later overrides earlier)
+- [x] `zzz.Env` module: `get(key)`, `getDefault(key, fallback)`, `require(key)` (error if missing)
+- [ ] Standalone module usable by all packages (zzz, zzz_db, zzz_jobs)
+- [ ] `.env.example` template generation (documents all config vars)
+- [ ] Sensitive value masking in logs (DATABASE_URL, SECRET_KEY, etc.)
+
+### Multi-Environment Configs (Phoenix-style)
+- [ ] `config/` directory convention with per-environment files
+- [ ] `config/config.zig` — shared defaults (app name, base settings)
+- [ ] `config/dev.zig` — dev overrides (debug logging, local DB, port 4000)
+- [ ] `config/prod.zig` — production settings (release mode, real DB URL, TLS)
+- [ ] `config/staging.zig` — staging overrides
+- [ ] `config/runtime.zig` — runtime overrides from env vars / `.env` files
+- [ ] Environment selected at build time: `zig build -Denv=prod`
+- [ ] Config struct: comptime-known base + runtime overlay from env
+- [ ] `zzz.Config.get(key)` unified access (works for DB URL, port, secret key, etc.)
+- [ ] Database config from env (`DATABASE_URL` parsing into host/port/name/user/pass)
+
+### Docker Support in `zzz new`
+- [ ] Generate `Dockerfile` — multi-stage build (Zig build stage → scratch/alpine runtime)
+- [ ] Generate `docker-compose.yml` — app + PostgreSQL service
+- [ ] Generate `.dockerignore` (zig-cache, zig-out, .env)
+- [ ] Generated `main.zig` reads host/port/DB config from env vars
+- [ ] `zzz new --docker=false` flag to skip Docker files
+- [ ] Health check endpoint wired into docker-compose
+
+### `zzz new` Enhancements
+- [ ] Generate `config/` directory with dev/prod/staging configs
+- [ ] Generate `.env.example` with documented variables
+- [ ] Generate `.env` with development defaults
+- [ ] `zzz new --db=sqlite` / `--db=postgres` / `--db=none` — database preset
+- [ ] `zzz new --full` — scaffold with controllers, models, templates, channels
+- [ ] `zzz new --api` — API-only mode (JSON routes, CORS, no templates)
+
+---
+
+## Phase 11: Server Backend Abstraction
+
+### Backend Trait
+- [ ] Define `Backend` interface: listener, accept, reader/writer, event model
+- [ ] Extract current `std.Io` implementation into `backends/std_io.zig`
+- [ ] Backend selection at build time: `zig build -Dbackend=std_io`
+- [ ] Shared `Handler` type that works across all backends
+- [ ] Connection lifecycle hooks (on_connect, on_disconnect) abstracted per backend
+- [ ] Backend-specific config options (epoll max events, io_uring queue depth, etc.)
+
+### Standard Backend (current)
+- [ ] Refactor `server.zig` into `backends/std_io.zig`
+- [ ] Thread-per-connection model preserved
+- [ ] Zero behavior change for existing users
+
+### io_uring Backend (Linux)
+- [ ] io_uring submission/completion queue management
+- [ ] Async accept, read, write, close operations
+- [ ] Multi-shot accept for high connection rates
+- [ ] Zero-copy send via `IORING_OP_SEND_ZC`
+- [ ] Fixed buffer pool for reduced allocation
+- [ ] Benchmark: target 500K+ req/sec plaintext
+
+### kqueue Backend (macOS)
+- [ ] kqueue event loop with kevent batching
+- [ ] Non-blocking accept + read/write
+- [ ] Edge-triggered mode for efficiency
+- [ ] Timer events for connection timeouts
+
+### epoll Backend (Linux fallback)
+- [ ] epoll event loop with edge-triggered mode
+- [ ] Non-blocking socket management
+- [ ] Fallback for Linux kernels without io_uring (< 5.6)
+
+### libhv Backend (Cross-platform)
+- [ ] libhv C library integration via `@cImport`
+- [ ] Event loop wrapping (hloop_t)
+- [ ] HTTP server via hv_httpd or raw TCP with zzz HTTP parser
+- [ ] WebSocket support via libhv's built-in WS
+- [ ] TLS via libhv's built-in SSL support
+- [ ] Timer integration for scheduled tasks
+
+---
+
+## Phase 12: Application Features
+
+### Caching Layer
+- [ ] `zzz.Cache` module — in-memory key-value cache
+- [ ] TTL (time-to-live) per entry with automatic expiration
+- [ ] LRU eviction when max capacity reached
+- [ ] Configurable max entries and max memory
+- [ ] `cache.get(key)`, `cache.put(key, value, ttl)`, `cache.delete(key)`, `cache.clear()`
+- [ ] Thread-safe (concurrent reads, mutex on writes)
+- [ ] Cache middleware for HTTP responses (ETag + cache headers)
+- [ ] Telemetry: hit rate, miss rate, eviction count
+- [ ] Optional: cache adapter interface (in-memory, Redis, distributed)
+
+### Mailer
+- [ ] `zzz.Mailer` module — email sending abstraction
+- [ ] SMTP client implementation (connect, AUTH, STARTTLS, send)
+- [ ] Adapter pattern: SMTP, SendGrid API, Mailgun API, test/log adapter
+- [ ] Email struct: to, cc, bcc, subject, text_body, html_body, attachments
+- [ ] Template rendering for email bodies (reuse zzz template engine)
+- [ ] Async delivery via zzz_jobs integration (enqueue email as background job)
+- [ ] `zzz gen mailer WelcomeEmail` — CLI generator for mailer boilerplate
+- [ ] Test adapter: capture sent emails in-memory for test assertions
+- [ ] Rate limiting / throttling per adapter
+
+### Internationalization (i18n)
+- [ ] Locale files (JSON): `locales/en.json`, `locales/es.json`, etc.
+- [ ] `{{t "hello.welcome"}}` template helper for translations
+- [ ] Nested key support: `{{t "errors.not_found"}}`
+- [ ] Interpolation: `{{t "hello.name" name=user.name}}`
+- [ ] Pluralization rules (one/few/many/other)
+- [ ] Locale detection from `Accept-Language` header
+- [ ] Locale override via session/cookie/query param
+- [ ] `zzz.I18n.t(locale, key, params)` runtime API
+- [ ] Missing translation fallback (default locale or key name)
+- [ ] `zzz gen locale es` — CLI generator for new locale file
+
+### Asset Pipeline
+- [ ] Static asset fingerprinting (content hash in filename for cache busting)
+- [ ] `{{asset_path "css/style.css"}}` → `/css/style-a1b2c3.css` template helper
+- [ ] Digest manifest file (JSON mapping original → fingerprinted paths)
+- [ ] CSS/JS minification (shell out to esbuild or lightningcss)
+- [ ] `zig build assets` step for production asset compilation
+- [ ] Source map support for development
+- [ ] Auto-rebuild in dev mode (watch file changes)
+- [ ] Bundle multiple files into one (basic concatenation)
+- [ ] Configurable asset paths (input dir, output dir)
+
+---
+
+## Phase 13: Operations & Observability
+
+### Telemetry Dashboard
+- [ ] Built-in web UI served at `/__zzz/dashboard` (opt-in middleware)
+- [ ] Request rate graph (requests/sec over time)
+- [ ] Latency histograms (p50, p95, p99)
+- [ ] Error rate and recent errors
+- [ ] Active WebSocket connections and channel subscriptions
+- [ ] Job queue depth and worker utilization (from zzz_jobs telemetry)
+- [ ] DB pool status: active/idle/waiting connections (from zzz_db)
+- [ ] Cache hit/miss rates (from cache telemetry)
+- [ ] System info: memory usage, uptime, Zig version
+- [ ] Auth-protected (configurable credentials or bearer token)
+
+### Release System
+- [ ] `zzz release` CLI command — build production artifact
+- [ ] Optimized binary build (ReleaseFast or ReleaseSafe, configurable)
+- [ ] Bundle static assets + templates into binary or tarball
+- [ ] Generate systemd unit file (`zzz release --systemd`)
+- [ ] Generate supervisord config
+- [ ] Cross-compilation: `zzz release --target=x86_64-linux`
+- [ ] Self-contained tarball output with start script
+- [ ] Version stamping (embed git SHA + build time in binary)
+- [ ] `zzz release --docker` — build Docker image directly
+
+### Deployment Targets
+- [ ] `zzz deploy fly` — Fly.io deployment (generate fly.toml, Dockerfile)
+- [ ] `zzz deploy railway` — Railway deployment config
+- [ ] `zzz deploy render` — Render blueprint generation
+- [ ] Generic `Procfile` generation for Heroku-like platforms
+- [ ] Deployment guide per platform in docs
+
+---
+
+## Phase 14: Distributed Systems
+
+### Node Discovery & Clustering
+- [ ] Node name/identity system (e.g., `zzz@host1:9000`)
+- [ ] Config-based node list (static cluster membership)
+- [ ] TCP mesh networking between nodes (custom binary protocol)
+- [ ] Node health monitoring (heartbeat + failure detection)
+- [ ] Automatic reconnection on node failure
+- [ ] `zzz.Cluster.nodes()` — list connected nodes
+- [ ] `zzz.Cluster.self()` — current node identity
+
+### Distributed PubSub
+- [ ] PubSub adapter interface (in-process, distributed, Redis)
+- [ ] TCP-based PubSub relay (broadcast messages across nodes in mesh)
+- [ ] Redis PubSub adapter (for deployments without direct node connectivity)
+- [ ] Topic subscription syncing across nodes
+- [ ] Message deduplication (prevent broadcast storms)
+- [ ] Channel messages automatically distributed (transparent to app code)
+
+### Distributed Presence
+- [ ] CRDT-based presence tracking across nodes (Phoenix-style)
+- [ ] Presence data replicated via PubSub
+- [ ] Conflict resolution for concurrent joins/leaves
+- [ ] `Presence.list(topic)` returns presence from all nodes
+- [ ] Presence diff events propagated across cluster
+
+### Distributed Cache
+- [ ] Consistent hashing for cache key distribution across nodes
+- [ ] Cache replication (configurable replication factor)
+- [ ] Cache invalidation broadcast
+- [ ] Fallback to local cache on network partition
+- [ ] `zzz.Cache.init(.{ .mode = .distributed })` opt-in
+
+---
+
+## Phase 15: LiveView (Server-Rendered Real-Time UI)
+
+### Core Runtime
+- [ ] LiveView module type: `mount/2`, `render/1`, `handle_event/3`, `handle_info/2`
+- [ ] Server-side state management per connected client
+- [ ] Initial HTTP render → WebSocket upgrade → diff-based updates
+- [ ] DOM diffing: compute minimal diff between old and new rendered HTML
+- [ ] Binary diff protocol over WebSocket (compressed patches)
+- [ ] Automatic reconnection with state recovery
+
+### Template Integration
+- [ ] LiveView-aware templates (re-render on state change)
+- [ ] `lv-click`, `lv-submit`, `lv-change` — client-side event bindings
+- [ ] `lv-value-*` — form field bindings (live form validation)
+- [ ] Dynamic class/attribute bindings based on server state
+
+### Client Library (zzz-live.js)
+- [ ] Lightweight JS client (~5KB) for WebSocket connection + DOM patching
+- [ ] Event capturing and serialization (clicks, form submissions, key events)
+- [ ] Morphdom-style DOM patching (or custom minimal patcher)
+- [ ] Loading states / optimistic UI indicators
+- [ ] Auto-served at `/__zzz/live.js`
+
+### Features
+- [ ] Live form validation (validate on every keystroke, server-side)
+- [ ] Live navigation (pushState + server-rendered page transitions)
+- [ ] Live file uploads with progress
+- [ ] Presence integration (show who's viewing a page in real-time)
+- [ ] `zzz gen live Dashboard` — CLI generator for LiveView modules
+
+---
+
 ## Summary
 
 | Phase | Status | Items Done | Items Remaining |
@@ -559,10 +796,16 @@ _(Moved to Phase 9: Release Preparation)_
 | 3. Templates & Views | In Progress | 34 | 8 |
 | 4. WebSocket & zzz.js | **Complete** | 17 | 1 |
 | 4b. Channels | **Complete** | 15 | 2 |
-| 5. Database (zzz_db) | **Complete** | 49 | 0 |
+| 5. Database (zzz_db) | **Complete** | 52 | 0 |
 | 6. Jobs (zzz_jobs) | **Complete** | 27 | 0 |
 | 7. Swagger & Controllers | **Complete** | 24 | 0 |
 | 8. Testing & CLI | **Complete** | 24 | 0 |
 | 9. Release Prep (v0.1.0) | In Progress | 25 | 12 |
+| 10. Config & Environment | Not Started | 0 | 22 |
+| 11. Backend Abstraction | Not Started | 0 | 25 |
+| 12. App Features | Not Started | 0 | 37 |
+| 13. Operations | Not Started | 0 | 22 |
+| 14. Distributed | Not Started | 0 | 19 |
+| 15. LiveView | Not Started | 0 | 17 |
 | Cross-Cutting | In Progress | 7 | 4 |
-| **Total** | | **296** | **30** |
+| **Total** | | **299** | **172** |
