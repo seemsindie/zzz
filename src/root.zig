@@ -133,6 +133,11 @@ pub const CookieOptions = Context.CookieOptions;
 // Environment
 pub const Env = @import("env.zig").Env;
 
+// Configuration
+pub const Environment = @import("config.zig").Environment;
+pub const DatabaseUrl = @import("config.zig").DatabaseUrl;
+pub const mergeWithEnv = @import("config.zig").mergeWithEnv;
+
 // Testing utilities
 pub const testing = @import("testing/root.zig");
 

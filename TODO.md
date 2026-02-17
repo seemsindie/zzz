@@ -458,7 +458,7 @@ zig build run -- --some-arg
 - [x] Initialize zzz_cli as separate package in workspace
 - [x] `zzz new my_app` - scaffold a new project
 - [x] `zzz server` - start development server with auto-reload
-- [ ] `zzz server` - file watching with swatcher (watch src/ + templates/, rebuild on change)
+- [ ] `zzz server` - file watching with swatcher (watch src/ + templates/ + public/, rebuild on change)
 - [x] `zzz routes` - list all registered routes
 - [x] `zzz migrate` - run pending migrations
 - [x] `zzz migrate rollback` - rollback last migration
@@ -568,33 +568,33 @@ _(Moved to Phase 9: Release Preparation)_
 - [x] Load order: `.env` → `.env.{environment}` → real env vars (later overrides earlier)
 - [x] `zzz.Env` module: `get(key)`, `getDefault(key, fallback)`, `require(key)` (error if missing)
 - [ ] Standalone module usable by all packages (zzz, zzz_db, zzz_jobs)
-- [ ] `.env.example` template generation (documents all config vars)
-- [ ] Sensitive value masking in logs (DATABASE_URL, SECRET_KEY, etc.)
+- [x] `.env.example` template generation (documents all config vars)
+- [x] Sensitive value masking in logs (DATABASE_URL, SECRET_KEY, etc.)
 
 ### Multi-Environment Configs (Phoenix-style)
-- [ ] `config/` directory convention with per-environment files
-- [ ] `config/config.zig` — shared defaults (app name, base settings)
-- [ ] `config/dev.zig` — dev overrides (debug logging, local DB, port 4000)
-- [ ] `config/prod.zig` — production settings (release mode, real DB URL, TLS)
+- [x] `config/` directory convention with per-environment files
+- [x] `config/config.zig` — shared defaults (app name, base settings)
+- [x] `config/dev.zig` — dev overrides (debug logging, local DB, port 4000)
+- [x] `config/prod.zig` — production settings (release mode, real DB URL, TLS)
 - [ ] `config/staging.zig` — staging overrides
-- [ ] `config/runtime.zig` — runtime overrides from env vars / `.env` files
-- [ ] Environment selected at build time: `zig build -Denv=prod`
-- [ ] Config struct: comptime-known base + runtime overlay from env
+- [x] `config/runtime.zig` — runtime overrides from env vars / `.env` files
+- [x] Environment selected at build time: `zig build -Denv=prod`
+- [x] Config struct: comptime-known base + runtime overlay from env
 - [ ] `zzz.Config.get(key)` unified access (works for DB URL, port, secret key, etc.)
-- [ ] Database config from env (`DATABASE_URL` parsing into host/port/name/user/pass)
+- [x] Database config from env (`DATABASE_URL` parsing into host/port/name/user/pass)
 
 ### Docker Support in `zzz new`
 - [ ] Generate `Dockerfile` — multi-stage build (Zig build stage → scratch/alpine runtime)
 - [ ] Generate `docker-compose.yml` — app + PostgreSQL service
 - [ ] Generate `.dockerignore` (zig-cache, zig-out, .env)
-- [ ] Generated `main.zig` reads host/port/DB config from env vars
+- [x] Generated `main.zig` reads host/port/DB config from env vars
 - [ ] `zzz new --docker=false` flag to skip Docker files
 - [ ] Health check endpoint wired into docker-compose
 
 ### `zzz new` Enhancements
-- [ ] Generate `config/` directory with dev/prod/staging configs
-- [ ] Generate `.env.example` with documented variables
-- [ ] Generate `.env` with development defaults
+- [x] Generate `config/` directory with dev/prod/staging configs
+- [x] Generate `.env.example` with documented variables
+- [x] Generate `.env` with development defaults
 - [ ] `zzz new --db=sqlite` / `--db=postgres` / `--db=none` — database preset
 - [ ] `zzz new --full` — scaffold with controllers, models, templates, channels
 - [ ] `zzz new --api` — API-only mode (JSON routes, CORS, no templates)

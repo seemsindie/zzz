@@ -147,6 +147,7 @@ pub fn build(b: *std.Build) void {
         .{ "test-swagger", "src/test_swagger.zig" },
         .{ "test-testing", "src/test_testing.zig" },
         .{ "test-env", "src/test_env.zig" },
+        .{ "test-config", "src/test_config.zig" },
     };
 
     const test_step = b.step("test", "Run all tests (parallel)");

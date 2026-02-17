@@ -123,6 +123,40 @@ pub const Env = struct {
         return default;
     }
 
+    /// Returns `"***"` if `key` looks sensitive, otherwise returns `value` unchanged.
+    /// A key is considered sensitive if it contains (case-insensitive) any of:
+    /// SECRET, PASSWORD, TOKEN, KEY, DATABASE_URL, PRIVATE.
+    pub fn maskSensitive(_: *const Env, key: []const u8, value: []const u8) []const u8 {
+        const sensitive = [_][]const u8{
+            "SECRET",
+            "PASSWORD",
+            "TOKEN",
+            "KEY",
+            "DATABASE_URL",
+            "PRIVATE",
+        };
+        for (sensitive) |pattern| {
+            if (containsIgnoreCase(key, pattern)) return "***";
+        }
+        return value;
+    }
+
+    fn containsIgnoreCase(haystack: []const u8, needle: []const u8) bool {
+        if (needle.len > haystack.len) return false;
+        const end = haystack.len - needle.len + 1;
+        for (0..end) |i| {
+            var match = true;
+            for (0..needle.len) |j| {
+                if (std.ascii.toUpper(haystack[i + j]) != std.ascii.toUpper(needle[j])) {
+                    match = false;
+                    break;
+                }
+            }
+            if (match) return true;
+        }
+        return false;
+    }
+
     // ── Internal ──────────────────────────────────────────────────────────
 
     /// Load and parse a .env file. Missing file is silently skipped.
@@ -169,7 +203,7 @@ pub const Env = struct {
     }
 
     /// Parse .env file content and add entries.
-    fn parseContent(self: *Env, content: []const u8) void {
+    pub fn parseContent(self: *Env, content: []const u8) void {
         var rest = content;
         while (rest.len > 0) {
             // Find end of line
@@ -470,4 +504,34 @@ test "init with missing file is not an error" {
     var env = try Env.init(allocator, .{ .path = "/tmp/zzz_nonexistent_env_file_test", .system_env = false });
     defer env.deinit();
     try std.testing.expect(env.entries.items.len == 0);
+}
+
+test "maskSensitive masks sensitive keys" {
+    const allocator = std.testing.allocator;
+    var env = Env{ .allocator = allocator };
+    defer env.deinit();
+    try std.testing.expectEqualStrings("***", env.maskSensitive("SECRET_KEY_BASE", "abc123"));
+    try std.testing.expectEqualStrings("***", env.maskSensitive("DB_PASSWORD", "hunter2"));
+    try std.testing.expectEqualStrings("***", env.maskSensitive("API_TOKEN", "tok_xxx"));
+    try std.testing.expectEqualStrings("***", env.maskSensitive("ENCRYPTION_KEY", "k3y"));
+    try std.testing.expectEqualStrings("***", env.maskSensitive("DATABASE_URL", "postgres://..."));
+    try std.testing.expectEqualStrings("***", env.maskSensitive("PRIVATE_KEY_PATH", "/etc/ssl/key.pem"));
+}
+
+test "maskSensitive case insensitive" {
+    const allocator = std.testing.allocator;
+    var env = Env{ .allocator = allocator };
+    defer env.deinit();
+    try std.testing.expectEqualStrings("***", env.maskSensitive("secret_key", "val"));
+    try std.testing.expectEqualStrings("***", env.maskSensitive("My_Password", "val"));
+    try std.testing.expectEqualStrings("***", env.maskSensitive("auth_token", "val"));
+}
+
+test "maskSensitive passes through non-sensitive keys" {
+    const allocator = std.testing.allocator;
+    var env = Env{ .allocator = allocator };
+    defer env.deinit();
+    try std.testing.expectEqualStrings("127.0.0.1", env.maskSensitive("HOST", "127.0.0.1"));
+    try std.testing.expectEqualStrings("9000", env.maskSensitive("PORT", "9000"));
+    try std.testing.expectEqualStrings("debug", env.maskSensitive("LOG_LEVEL", "debug"));
 }
