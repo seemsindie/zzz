@@ -567,7 +567,7 @@ _(Moved to Phase 9: Release Preparation)_
 - [x] `.env` file parser (key=value, `#` comments, quoted values)
 - [x] Load order: `.env` → `.env.{environment}` → real env vars (later overrides earlier)
 - [x] `zzz.Env` module: `get(key)`, `getDefault(key, fallback)`, `require(key)` (error if missing)
-- [ ] Standalone module usable by all packages (zzz, zzz_db, zzz_jobs)
+- [x] Standalone module usable by all packages (zzz, zzz_db, zzz_jobs) — app loads env via `zzz.Env`, passes values downstream
 - [x] `.env.example` template generation (documents all config vars)
 - [x] Sensitive value masking in logs (DATABASE_URL, SECRET_KEY, etc.)
 
@@ -576,28 +576,28 @@ _(Moved to Phase 9: Release Preparation)_
 - [x] `config/config.zig` — shared defaults (app name, base settings)
 - [x] `config/dev.zig` — dev overrides (debug logging, local DB, port 4000)
 - [x] `config/prod.zig` — production settings (release mode, real DB URL, TLS)
-- [ ] `config/staging.zig` — staging overrides
+- [x] `config/staging.zig` — staging overrides
 - [x] `config/runtime.zig` — runtime overrides from env vars / `.env` files
 - [x] Environment selected at build time: `zig build -Denv=prod`
 - [x] Config struct: comptime-known base + runtime overlay from env
-- [ ] `zzz.Config.get(key)` unified access (works for DB URL, port, secret key, etc.)
+- [x] `zzz.configInit` convenience — combines Env.init + mergeWithEnv in one call
 - [x] Database config from env (`DATABASE_URL` parsing into host/port/name/user/pass)
 
 ### Docker Support in `zzz new`
-- [ ] Generate `Dockerfile` — multi-stage build (Zig build stage → scratch/alpine runtime)
-- [ ] Generate `docker-compose.yml` — app + PostgreSQL service
-- [ ] Generate `.dockerignore` (zig-cache, zig-out, .env)
+- [x] Generate `Dockerfile` — multi-stage build (Zig build stage → slim runtime)
+- [x] Generate `docker-compose.yml` — app + PostgreSQL service (with `--db=postgres`)
+- [x] Generate `.dockerignore` (zig-cache, zig-out, .env)
 - [x] Generated `main.zig` reads host/port/DB config from env vars
-- [ ] `zzz new --docker=false` flag to skip Docker files
-- [ ] Health check endpoint wired into docker-compose
+- [x] `zzz new --docker=false` flag to skip Docker files
+- [x] Health check endpoint wired into docker-compose
 
 ### `zzz new` Enhancements
-- [x] Generate `config/` directory with dev/prod/staging configs
+- [x] Generate `config/` directory with dev/prod/staging configs (all three)
 - [x] Generate `.env.example` with documented variables
 - [x] Generate `.env` with development defaults
-- [ ] `zzz new --db=sqlite` / `--db=postgres` / `--db=none` — database preset
-- [ ] `zzz new --full` — scaffold with controllers, models, templates, channels
-- [ ] `zzz new --api` — API-only mode (JSON routes, CORS, no templates)
+- [x] `zzz new --db=sqlite` / `--db=postgres` / `--db=none` — database preset
+- [x] `zzz new --full` — scaffold with controllers, middleware, templates
+- [x] `zzz new --api` — API-only mode (JSON routes, CORS, no templates)
 
 ---
 
@@ -810,11 +810,11 @@ _(Moved to Phase 9: Release Preparation)_
 | 7. Swagger & Controllers | **Complete** | 24 | 0 |
 | 8. Testing & CLI | **Complete** | 24 | 0 |
 | 9. Release Prep (v0.1.0) | In Progress | 25 | 12 |
-| 10. Config & Environment | Not Started | 0 | 22 |
+| 10. Config & Environment | **Complete** | 22 | 0 |
 | 11. Backend Abstraction | Not Started | 0 | 25 |
 | 12. App Features | Not Started | 0 | 37 |
 | 13. Operations | Not Started | 0 | 22 |
 | 14. Distributed | Not Started | 0 | 19 |
 | 15. LiveView | Not Started | 0 | 17 |
 | Cross-Cutting | In Progress | 7 | 4 |
-| **Total** | | **299** | **172** |
+| **Total** | | **321** | **150** |

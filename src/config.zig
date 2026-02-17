@@ -256,6 +256,23 @@ fn snakeToCapsSnake(comptime name: []const u8) []const u8 {
     };
 }
 
+// ── configInit ───────────────────────────────────────────────────────
+
+/// One-call convenience: load `.env`, merge with comptime config, return both.
+///
+/// Combines `Env.init` + `mergeWithEnv` into a single call so callers don't
+/// need to import both modules separately.
+///
+/// ```zig
+/// const result = try zzz.configInit(@TypeOf(app_config.config), app_config.config, allocator, .{});
+/// defer result.env.deinit();
+/// const config = result.config;
+/// ```
+pub fn configInit(comptime T: type, comptime base: T, allocator: std.mem.Allocator, env_options: Env.Options) !struct { config: T, env: Env } {
+    var env = try Env.init(allocator, env_options);
+    return .{ .config = mergeWithEnv(T, base, &env), .env = env };
+}
+
 // ── Tests ────────────────────────────────────────────────────────────
 
 test "Environment.fromString valid values" {
@@ -396,6 +413,24 @@ test "mergeWithEnv leaves fields unchanged when no env var" {
     const merged = mergeWithEnv(Cfg, base, &env);
     try std.testing.expectEqual(@as(u16, 4000), merged.port);
     try std.testing.expectEqualStrings("localhost", merged.host);
+}
+
+test "configInit combines env loading and merge" {
+    const allocator = std.testing.allocator;
+
+    const Cfg = struct {
+        host: []const u8,
+        port: u16,
+    };
+    const base = Cfg{ .host = "127.0.0.1", .port = 4000 };
+
+    // Use path=null so no file I/O, system_env=false so no getenv
+    var result = try configInit(Cfg, base, allocator, .{ .path = null, .system_env = false });
+    defer result.env.deinit();
+
+    // With no env vars, config should equal base
+    try std.testing.expectEqualStrings("127.0.0.1", result.config.host);
+    try std.testing.expectEqual(@as(u16, 4000), result.config.port);
 }
 
 test "mergeWithEnv with enum field" {
