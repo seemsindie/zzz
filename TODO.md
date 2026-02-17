@@ -604,19 +604,21 @@ _(Moved to Phase 9: Release Preparation)_
 ## Phase 11: Server Backend Abstraction
 
 ### Backend Trait
-- [ ] Define `Backend` interface: listener, accept, reader/writer, event model
-- [ ] Extract current `std.Io` implementation into `backends/std_io.zig`
-- [ ] Backend selection at build time: `zig build -Dbackend=std_io`
-- [ ] Shared `Handler` type that works across all backends
-- [ ] Connection lifecycle hooks (on_connect, on_disconnect) abstracted per backend
-- [ ] Backend-specific config options (epoll max events, io_uring queue depth, etc.)
+- [x] Define `Backend` interface: listener, accept, reader/writer, event model
+- [x] Extract shared request handling into `request_handler.zig`
+- [x] Backend selection at build time: `zig build -Dbackend=zzz|libhv`
+- [x] Shared `Handler` type that works across all backends
+- [x] Comptime backend selection via `backend.zig`
+- [x] Backend-specific config options (`BackendConfig` per backend)
 
-### Standard Backend (current)
-- [ ] Refactor `server.zig` into `backends/std_io.zig`
-- [ ] Thread-per-connection model preserved
-- [ ] Zero behavior change for existing users
+### Native zzz Backend (default)
+- [x] Refactor `server.zig` to delegate to selected backend
+- [x] Thread pool with bounded queue (replaces thread-per-connection)
+- [x] BoundedQueue using pthread mutex + condition variables
+- [x] Back-pressure: accept blocks when queue is full
+- [x] Zero behavior change for existing users
 
-### io_uring Backend (Linux)
+### io_uring Backend (Linux, future)
 - [ ] io_uring submission/completion queue management
 - [ ] Async accept, read, write, close operations
 - [ ] Multi-shot accept for high connection rates
@@ -624,22 +626,26 @@ _(Moved to Phase 9: Release Preparation)_
 - [ ] Fixed buffer pool for reduced allocation
 - [ ] Benchmark: target 500K+ req/sec plaintext
 
-### kqueue Backend (macOS)
+### kqueue Backend (macOS, future)
 - [ ] kqueue event loop with kevent batching
 - [ ] Non-blocking accept + read/write
 - [ ] Edge-triggered mode for efficiency
 - [ ] Timer events for connection timeouts
 
-### epoll Backend (Linux fallback)
+### epoll Backend (Linux fallback, future)
 - [ ] epoll event loop with edge-triggered mode
 - [ ] Non-blocking socket management
 - [ ] Fallback for Linux kernels without io_uring (< 5.6)
 
 ### libhv Backend (Cross-platform)
-- [ ] libhv C library integration via `@cImport`
-- [ ] Event loop wrapping (hloop_t)
-- [ ] HTTP server via hv_httpd or raw TCP with zzz HTTP parser
-- [ ] WebSocket support via libhv's built-in WS
+- [x] libhv C library integration via `@cImport`
+- [x] Vendored as git submodule (`vendor/libhv`)
+- [x] Event loop wrapping (`hloop_t`)
+- [x] TCP server with zzz HTTP parser in `on_read` callback
+- [x] Incremental header/body parsing with per-connection state
+- [x] Chunked transfer encoding support
+- [x] Keep-alive connection reuse
+- [ ] WebSocket support via callback-driven I/O
 - [ ] TLS via libhv's built-in SSL support
 - [ ] Timer integration for scheduled tasks
 
@@ -811,10 +817,10 @@ _(Moved to Phase 9: Release Preparation)_
 | 8. Testing & CLI | **Complete** | 24 | 0 |
 | 9. Release Prep (v0.1.0) | In Progress | 25 | 12 |
 | 10. Config & Environment | **Complete** | 22 | 0 |
-| 11. Backend Abstraction | Not Started | 0 | 25 |
+| 11. Backend Abstraction | In Progress | 18 | 16 |
 | 12. App Features | Not Started | 0 | 37 |
 | 13. Operations | Not Started | 0 | 22 |
 | 14. Distributed | Not Started | 0 | 19 |
 | 15. LiveView | Not Started | 0 | 17 |
 | Cross-Cutting | In Progress | 7 | 4 |
-| **Total** | | **321** | **150** |
+| **Total** | | **339** | **141** |

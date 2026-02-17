@@ -175,6 +175,8 @@ pub fn main(init: std.process.Init) !void {
     var server = zzz.Server.init(allocator, .{
         .host = "127.0.0.1",
         .port = 3000,
+        .keepalive_timeout_ms = 5_000, // shorter for benchmarks
+        .read_timeout_ms = 5_000, // faster shutdown detection
     }, App.handler);
 
     try server.listen(io);

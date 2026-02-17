@@ -6,6 +6,7 @@ DURATION="${BENCH_DURATION:-10s}"
 THREADS="${BENCH_THREADS:-4}"
 CONNECTIONS="${BENCH_CONNECTIONS:-100}"
 HOST="${BENCH_HOST:-http://127.0.0.1:3000}"
+BACKEND="${BENCH_BACKEND:-zzz}"
 MAX_WAIT=10  # seconds to wait for server
 
 # ── Detect benchmark tool ──────────────────────────────────────────────
@@ -25,16 +26,20 @@ else
 fi
 
 echo "Using benchmark tool: $BENCH_TOOL"
-echo "Duration: $DURATION | Threads: $THREADS | Connections: $CONNECTIONS"
+echo "Backend: $BACKEND | Duration: $DURATION | Threads: $THREADS | Connections: $CONNECTIONS"
 echo ""
 
 # ── Build and start bench server ───────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-echo "Building benchmark server (ReleaseFast)..."
+echo "Building benchmark server (ReleaseFast, backend=$BACKEND)..."
 cd "$PROJECT_DIR"
-zig build bench 2>&1
+zig build bench -Dbackend="$BACKEND" 2>&1
+
+# Kill any leftover server on port 3000
+lsof -ti:3000 | xargs kill -9 2>/dev/null || true
+sleep 0.5
 
 echo "Starting benchmark server on port 3000..."
 ./zig-out/bin/zzz-bench &
@@ -44,6 +49,14 @@ SERVER_PID=$!
 cleanup() {
     if kill -0 "$SERVER_PID" 2>/dev/null; then
         kill "$SERVER_PID" 2>/dev/null || true
+        # Wait up to 3s for graceful shutdown, then force kill
+        for i in $(seq 1 6); do
+            kill -0 "$SERVER_PID" 2>/dev/null || break
+            sleep 0.5
+        done
+        if kill -0 "$SERVER_PID" 2>/dev/null; then
+            kill -9 "$SERVER_PID" 2>/dev/null || true
+        fi
         wait "$SERVER_PID" 2>/dev/null || true
     fi
     rm -f /tmp/zzz-bench.db /tmp/zzz-bench.db-wal /tmp/zzz-bench.db-shm

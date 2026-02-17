@@ -5,10 +5,15 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const tls_enabled = b.option(bool, "tls", "Enable TLS/HTTPS support (requires OpenSSL)") orelse false;
+    const backend = b.option([]const u8, "backend", "Server backend: \"zzz\" (default) or \"libhv\"") orelse "zzz";
 
     // Create a module for the TLS build option so server.zig can query it at comptime
     const tls_options = b.addOptions();
     tls_options.addOption(bool, "tls_enabled", tls_enabled);
+
+    // Backend selection option
+    const backend_options = b.addOptions();
+    backend_options.addOption([]const u8, "backend", backend);
 
     const mod = b.addModule("zzz", .{
         .root_source_file = b.path("src/root.zig"),
@@ -17,6 +22,9 @@ pub fn build(b: *std.Build) void {
 
     // Add TLS options module
     mod.addImport("tls_options", tls_options.createModule());
+
+    // Add backend options module
+    mod.addImport("backend_options", backend_options.createModule());
 
     // libc is needed unconditionally (sendFile, clock_gettime, etc.)
     mod.link_libc = true;
@@ -42,6 +50,66 @@ pub fn build(b: *std.Build) void {
         tls_mod.linkSystemLibrary("crypto", .{});
         tls_mod.addLibraryPath(.{ .cwd_relative = "/opt/homebrew/opt/openssl@3/lib" });
         tls_mod.link_libc = true;
+    }
+
+    // ── libhv C compilation (when backend=libhv) ────────────────────────
+    if (std.mem.eql(u8, backend, "libhv")) {
+        const libhv_c_flags: []const []const u8 = if (target.result.os.tag == .macos)
+            &.{
+                "-DHV_WITHOUT_EVPP",
+                "-DHV_WITHOUT_HTTP",
+                "-DHV_WITHOUT_SSL",
+                "-DHAVE_EVENTFD=0",
+                "-DHAVE_ENDIAN_H=0",
+                "-DHAVE_PTHREAD_SPIN_LOCK=0",
+                "-Wno-date-time",
+            }
+        else
+            &.{
+                "-DHV_WITHOUT_EVPP",
+                "-DHV_WITHOUT_HTTP",
+                "-DHV_WITHOUT_SSL",
+                "-Wno-date-time",
+            };
+
+        mod.addCSourceFiles(.{
+            .files = &.{
+                "vendor/libhv/base/hbase.c",
+                "vendor/libhv/base/hsocket.c",
+                "vendor/libhv/base/hlog.c",
+                "vendor/libhv/base/htime.c",
+                "vendor/libhv/base/herr.c",
+                "vendor/libhv/base/rbtree.c",
+                "vendor/libhv/event/hloop.c",
+                "vendor/libhv/event/hevent.c",
+                "vendor/libhv/event/nio.c",
+                "vendor/libhv/event/nlog.c",
+                "vendor/libhv/event/overlapio.c",
+                "vendor/libhv/event/unpack.c",
+                "vendor/libhv/ssl/hssl.c",
+                "vendor/libhv/ssl/nossl.c",
+            },
+            .flags = libhv_c_flags,
+        });
+
+        // Platform-specific event source
+        if (target.result.os.tag == .linux) {
+            mod.addCSourceFiles(.{
+                .files = &.{"vendor/libhv/event/epoll.c"},
+                .flags = libhv_c_flags,
+            });
+        } else if (target.result.os.tag == .macos) {
+            mod.addCSourceFiles(.{
+                .files = &.{"vendor/libhv/event/kqueue.c"},
+                .flags = libhv_c_flags,
+            });
+        }
+
+        mod.addIncludePath(b.path("vendor/libhv"));
+        mod.addIncludePath(b.path("vendor/libhv/base"));
+        mod.addIncludePath(b.path("vendor/libhv/event"));
+        mod.addIncludePath(b.path("vendor/libhv/ssl"));
+        mod.link_libc = true;
     }
 
     const exe = b.addExecutable(.{
@@ -148,6 +216,7 @@ pub fn build(b: *std.Build) void {
         .{ "test-testing", "src/test_testing.zig" },
         .{ "test-env", "src/test_env.zig" },
         .{ "test-config", "src/test_config.zig" },
+        .{ "test-backend", "src/test_backend.zig" },
     };
 
     const test_step = b.step("test", "Run all tests (parallel)");
@@ -163,6 +232,13 @@ pub fn build(b: *std.Build) void {
             }),
         });
         t.root_module.link_libc = true;
+
+        // Backend tests need the same options modules as the main zzz module
+        if (comptime std.mem.eql(u8, name, "test-backend")) {
+            t.root_module.addImport("tls_options", tls_options.createModule());
+            t.root_module.addImport("backend_options", backend_options.createModule());
+            t.root_module.addImport("tls", tls_mod);
+        }
 
         const run_t = b.addRunArtifact(t);
         test_step.dependOn(&run_t.step);

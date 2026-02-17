@@ -145,6 +145,10 @@ pub const testing = @import("testing/root.zig");
 // Re-export Io for convenience
 pub const Io = @import("std").Io;
 
+// Backend info
+pub const backend_name = @import("core/server.zig").backend_name;
+pub const SelectedBackend = @import("core/server.zig").SelectedBackend;
+
 /// Framework version.
 pub const version = "0.1.0";
 
