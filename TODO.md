@@ -645,9 +645,9 @@ _(Moved to Phase 9: Release Preparation)_
 - [x] Incremental header/body parsing with per-connection state
 - [x] Chunked transfer encoding support
 - [x] Keep-alive connection reuse
-- [ ] WebSocket support via callback-driven I/O
-- [ ] TLS via libhv's built-in SSL support
-- [ ] Timer integration for scheduled tasks
+- [x] WebSocket support via callback-driven I/O
+- [x] TLS via libhv's built-in SSL support
+- [x] Timer integration for scheduled tasks
 
 ---
 
@@ -817,10 +817,10 @@ _(Moved to Phase 9: Release Preparation)_
 | 8. Testing & CLI | **Complete** | 24 | 0 |
 | 9. Release Prep (v0.1.0) | In Progress | 25 | 12 |
 | 10. Config & Environment | **Complete** | 22 | 0 |
-| 11. Backend Abstraction | In Progress | 18 | 16 |
+| 11. Backend Abstraction | In Progress | 21 | 13 |
 | 12. App Features | Not Started | 0 | 37 |
 | 13. Operations | Not Started | 0 | 22 |
 | 14. Distributed | Not Started | 0 | 19 |
 | 15. LiveView | Not Started | 0 | 17 |
 | Cross-Cutting | In Progress | 7 | 4 |
-| **Total** | | **339** | **141** |
+| **Total** | | **342** | **138** |

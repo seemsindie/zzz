@@ -172,6 +172,52 @@ test "backend module: BackendConfig exists" {
     try testing.expectEqual(@as(u32, 1024), config.queue_capacity);
 }
 
+// ── libhv backend type verification (comptime) ─────────────────────
+// These tests only compile when backend=libhv (requires libhv C headers).
+
+const backend_options = @import("backend_options");
+const is_libhv = std.mem.eql(u8, backend_options.backend, "libhv");
+
+const libhv_backend = if (is_libhv) @import("core/backends/libhv.zig") else struct {};
+
+test "libhv backend: BackendConfig type exists" {
+    if (!is_libhv) return error.SkipZigTest;
+    const BC = libhv_backend.BackendConfig;
+    const config: BC = .{};
+    try testing.expectEqual(@as(u8, 1), config.event_loop_count);
+}
+
+test "libhv backend: Timer type exists" {
+    if (!is_libhv) return error.SkipZigTest;
+    try testing.expect(@sizeOf(libhv_backend.Timer) > 0);
+}
+
+test "libhv backend: timer functions are declared" {
+    if (!is_libhv) return error.SkipZigTest;
+    try testing.expect(@TypeOf(libhv_backend.addTimer) != void);
+    try testing.expect(@TypeOf(libhv_backend.removeTimer) != void);
+    try testing.expect(@TypeOf(libhv_backend.resetTimer) != void);
+}
+
+test "libhv backend: LibhvWriter type exists" {
+    if (!is_libhv) return error.SkipZigTest;
+    try testing.expect(@sizeOf(libhv_backend.LibhvWriter) > 0);
+}
+
+test "libhv backend: PipeReader type exists" {
+    if (!is_libhv) return error.SkipZigTest;
+    try testing.expect(@sizeOf(libhv_backend.PipeReader) > 0);
+}
+
+test "libhv backend: TLS config types exist" {
+    // This test works regardless of backend — TlsConfig is always available
+    const server_mod = @import("core/server.zig");
+    const TlsCfg = server_mod.TlsConfig;
+    try testing.expect(@sizeOf(TlsCfg) > 0);
+    const cfg: server_mod.Config = .{};
+    try testing.expect(cfg.tls == null);
+}
+
 // ── Request handler extraction tests ────────────────────────────────
 
 const request_handler_mod = @import("core/request_handler.zig");

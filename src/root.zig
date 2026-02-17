@@ -149,6 +149,12 @@ pub const Io = @import("std").Io;
 pub const backend_name = @import("core/server.zig").backend_name;
 pub const SelectedBackend = @import("core/server.zig").SelectedBackend;
 
+// Timer (available when backend=libhv)
+pub const Timer = if (@hasDecl(SelectedBackend, "Timer")) SelectedBackend.Timer else void;
+pub const addTimer = if (@hasDecl(SelectedBackend, "addTimer")) SelectedBackend.addTimer else {};
+pub const removeTimer = if (@hasDecl(SelectedBackend, "removeTimer")) SelectedBackend.removeTimer else {};
+pub const resetTimer = if (@hasDecl(SelectedBackend, "resetTimer")) SelectedBackend.resetTimer else {};
+
 /// Framework version.
 pub const version = "0.1.0";
 

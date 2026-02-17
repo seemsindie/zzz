@@ -11,16 +11,53 @@ const http_parser = @import("../http/parser.zig");
 const Request = @import("../http/request.zig").Request;
 const Response = @import("../http/response.zig").Response;
 const StatusCode = @import("../http/status.zig").StatusCode;
+const ws_handshake = @import("../websocket/handshake.zig");
+const ws_connection = @import("../websocket/connection.zig");
 
 const hv = @cImport({
     @cInclude("hloop.h");
     @cInclude("hsocket.h");
+    @cInclude("hssl.h");
 });
 
 /// Backend-specific configuration for the libhv event-loop backend.
 pub const BackendConfig = struct {
     /// Number of event loops (future: multi-loop).
     event_loop_count: u8 = 1,
+};
+
+/// Writer that wraps an hio_t* for WebSocket output via hio_write.
+pub const LibhvWriter = struct {
+    io: *hv.hio_t,
+
+    pub fn writeAll(self: *LibhvWriter, data: []const u8) !void {
+        _ = hv.hio_write(self.io, data.ptr, @intCast(data.len));
+    }
+
+    pub fn flush(_: *LibhvWriter) !void {
+        // hio_write sends immediately; no buffering
+    }
+};
+
+/// Reader that reads from a pipe fd, providing blocking reads for WebSocket runLoop.
+pub const PipeReader = struct {
+    fd: std.posix.fd_t,
+
+    pub fn takeByte(self: *PipeReader) !u8 {
+        var buf_arr: [1]u8 = undefined;
+        const n = std.posix.read(self.fd, &buf_arr) catch return error.EndOfStream;
+        if (n == 0) return error.EndOfStream;
+        return buf_arr[0];
+    }
+
+    pub fn readSliceAll(self: *PipeReader, buf: []u8) !void {
+        var total: usize = 0;
+        while (total < buf.len) {
+            const n = std.posix.read(self.fd, buf[total..]) catch return error.EndOfStream;
+            if (n == 0) return error.EndOfStream;
+            total += n;
+        }
+    }
 };
 
 /// Per-connection state, stored as hio context.
@@ -33,6 +70,11 @@ const ConnState = struct {
     allocator: Allocator,
     handler: Handler,
     config: Config,
+    // WebSocket state
+    ws_mode: bool,
+    ws_pipe_write_fd: ?std.posix.fd_t,
+    ws_pipe_read_fd: ?std.posix.fd_t,
+    ws_thread: ?std.Thread,
 
     fn init(allocator: Allocator, handler: Handler, config: Config) !*ConnState {
         const state = try allocator.create(ConnState);
@@ -45,12 +87,21 @@ const ConnState = struct {
             .allocator = allocator,
             .handler = handler,
             .config = config,
+            .ws_mode = false,
+            .ws_pipe_write_fd = null,
+            .ws_pipe_read_fd = null,
+            .ws_thread = null,
         };
         return state;
     }
 
     fn deinit(self: *ConnState) void {
         const allocator = self.allocator;
+        // Close pipe fds if still open
+        if (self.ws_pipe_write_fd) |fd| std.posix.close(fd);
+        if (self.ws_pipe_read_fd) |fd| std.posix.close(fd);
+        // Join WS thread if it's still running
+        if (self.ws_thread) |t| t.join();
         self.buf.deinit(allocator);
         allocator.destroy(self);
     }
@@ -101,14 +152,33 @@ pub fn listen(server: *Server, io: Io) !void {
     host_buf[host_len] = 0;
     const host_z: [*c]const u8 = &host_buf;
 
-    const listenio = hv.hloop_create_tcp_server(loop, host_z, port, onAccept);
+    const use_tls = config.tls != null;
+    const listenio = if (use_tls)
+        hv.hloop_create_ssl_server(loop, host_z, port, onAccept)
+    else
+        hv.hloop_create_tcp_server(loop, host_z, port, onAccept);
     if (listenio == null) {
         var loop_ptr: ?*hv.hloop_t = loop;
         hv.hloop_free(&loop_ptr);
         return error.ListenFailed;
     }
 
-    std.log.info("Zzz server listening on http://{s}:{d} (backend=libhv)", .{
+    // Configure TLS if enabled
+    if (config.tls) |tls_config| {
+        var ssl_opt: hv.hssl_ctx_opt_t = std.mem.zeroes(hv.hssl_ctx_opt_t);
+        ssl_opt.crt_file = tls_config.cert_file.ptr;
+        ssl_opt.key_file = tls_config.key_file.ptr;
+        ssl_opt.endpoint = hv.HSSL_SERVER;
+        if (hv.hio_new_ssl_ctx(listenio, &ssl_opt) != 0) {
+            var loop_ptr: ?*hv.hloop_t = loop;
+            hv.hloop_free(&loop_ptr);
+            return error.SslContextFailed;
+        }
+    }
+
+    const scheme = if (use_tls) "https" else "http";
+    std.log.info("Zzz server listening on {s}://{s}:{d} (backend=libhv)", .{
+        scheme,
         config.host,
         config.port,
     });
@@ -150,6 +220,19 @@ fn onRead(io: ?*hv.hio_t, buf: ?*anyopaque, readbytes: c_int) callconv(.c) void 
     const nbytes: usize = @intCast(readbytes);
 
     const state: *ConnState = @ptrCast(@alignCast(hv.hio_context(conn_io) orelse return));
+
+    // WebSocket mode: forward raw bytes to pipe for runLoop thread
+    if (state.ws_mode) {
+        if (state.ws_pipe_write_fd) |fd| {
+            var written: usize = 0;
+            while (written < nbytes) {
+                const result = std.c.write(fd, data_ptr + written, nbytes - written);
+                if (result <= 0) break;
+                written += @intCast(result);
+            }
+        }
+        return;
+    }
 
     // Append received bytes
     state.buf.appendSlice(state.allocator, data_ptr[0..nbytes]) catch {
@@ -270,6 +353,70 @@ fn handleAndRespond(conn_io: *hv.hio_t, state: *ConnState, req: *Request) void {
     };
     defer resp.deinit(state.allocator);
 
+    // Check for WebSocket upgrade
+    if (resp.status == .switching_protocols) {
+        if (resp.ws_handler) |ws_upgrade| {
+            // Build and send the 101 handshake response
+            const upgrade_bytes = ws_handshake.buildUpgradeResponse(state.allocator, req) catch {
+                sendErrorResponse(conn_io, state, .internal_server_error);
+                return;
+            };
+            defer state.allocator.free(upgrade_bytes);
+
+            _ = hv.hio_write(conn_io, upgrade_bytes.ptr, @intCast(upgrade_bytes.len));
+
+            // Create a pipe for the WS bridge
+            var pipe_fds: [2]std.posix.fd_t = undefined;
+            if (std.c.pipe(&pipe_fds) != 0) {
+                _ = hv.hio_close(conn_io);
+                return;
+            }
+            state.ws_pipe_read_fd = pipe_fds[0];
+            state.ws_pipe_write_fd = pipe_fds[1];
+            state.ws_mode = true;
+
+            // Disable keepalive/read timeouts — WS connections are long-lived
+            hv.hio_set_keepalive_timeout(conn_io, 0);
+            hv.hio_set_read_timeout(conn_io, 0);
+
+            // Set up WebSocket ping heartbeat (every 30s)
+            hv.hio_set_heartbeat(conn_io, 30000, wsPingCallback);
+
+            // Capture data needed by the WS thread
+            const ws_handler_copy = ws_upgrade.handler;
+            const ws_params_copy = ws_upgrade.params;
+            const ws_query_copy = ws_upgrade.query;
+            const ws_assigns_copy = ws_upgrade.assigns;
+            const allocator = state.allocator;
+            const read_fd = pipe_fds[0];
+
+            // Spawn a thread to run the WebSocket frame loop
+            state.ws_thread = std.Thread.spawn(.{}, wsThreadFn, .{
+                allocator,
+                conn_io,
+                read_fd,
+                ws_handler_copy,
+                ws_params_copy,
+                ws_query_copy,
+                ws_assigns_copy,
+                state,
+            }) catch {
+                state.ws_mode = false;
+                std.posix.close(pipe_fds[0]);
+                std.posix.close(pipe_fds[1]);
+                state.ws_pipe_read_fd = null;
+                state.ws_pipe_write_fd = null;
+                _ = hv.hio_close(conn_io);
+                return;
+            };
+
+            // Free the WebSocketUpgrade struct allocated in wsHandler middleware
+            state.allocator.destroy(ws_upgrade);
+
+            return; // Connection taken over by WebSocket
+        }
+    }
+
     // Set response version to match request
     resp.version = req.version;
 
@@ -294,6 +441,41 @@ fn handleAndRespond(conn_io: *hv.hio_t, state: *ConnState, req: *Request) void {
     }
 }
 
+/// Thread function that runs the WebSocket frame loop using pipe-based I/O.
+fn wsThreadFn(
+    allocator: Allocator,
+    conn_io: *hv.hio_t,
+    read_fd: std.posix.fd_t,
+    ws_handler: ws_connection.Handler,
+    ws_params: @import("../../middleware/context.zig").Params,
+    ws_query: @import("../../middleware/context.zig").Params,
+    ws_assigns: @import("../../middleware/context.zig").Assigns,
+    state: *ConnState,
+) void {
+    var pipe_reader: PipeReader = .{ .fd = read_fd };
+    var libhv_writer: LibhvWriter = .{ .io = conn_io };
+
+    ws_connection.runLoop(
+        allocator,
+        &pipe_reader,
+        &libhv_writer,
+        ws_handler,
+        ws_params,
+        ws_query,
+        ws_assigns,
+    );
+
+    // runLoop returned — WS connection is done
+    state.ws_mode = false;
+
+    // Close the read end of the pipe (write end closed by onClose or here)
+    std.posix.close(read_fd);
+    state.ws_pipe_read_fd = null;
+
+    // Close the connection from the event loop side
+    _ = hv.hio_close(conn_io);
+}
+
 fn sendErrorResponse(conn_io: *hv.hio_t, state: *ConnState, status: StatusCode) void {
     var resp = Response.empty(status);
     const bytes = resp.serialize(std.heap.page_allocator) catch {
@@ -310,6 +492,20 @@ fn sendErrorResponse(conn_io: *hv.hio_t, state: *ConnState, status: StatusCode) 
 fn onClose(io: ?*hv.hio_t) callconv(.c) void {
     const conn_io = io orelse return;
     const state: *ConnState = @ptrCast(@alignCast(hv.hio_context(conn_io) orelse return));
+
+    // If in WS mode, close the pipe write fd to trigger EOF in the reader thread
+    if (state.ws_mode) {
+        if (state.ws_pipe_write_fd) |fd| {
+            std.posix.close(fd);
+            state.ws_pipe_write_fd = null;
+        }
+        // Join the WS thread before freeing state
+        if (state.ws_thread) |t| {
+            t.join();
+            state.ws_thread = null;
+        }
+    }
+
     state.deinit();
 }
 
@@ -345,4 +541,43 @@ fn decodeChunkedBody(allocator: Allocator, data: []const u8) !?[]u8 {
 
     if (body.items.len == 0) return null;
     return try body.toOwnedSlice(allocator);
+}
+
+// ── Timer API ────────────────────────────────────────────────────────
+
+/// Timer handle wrapping libhv's htimer_t.
+pub const Timer = struct {
+    inner: *hv.htimer_t,
+};
+
+/// Timer callback type.
+pub const TimerCallback = *const fn (?*hv.htimer_t) callconv(.c) void;
+
+/// Add a one-shot or repeating timer.
+/// `timeout_ms`: interval in milliseconds.
+/// `repeat`: number of repetitions (0 = infinite).
+pub fn addTimer(timeout_ms: u32, repeat: u32, callback: TimerCallback) ?Timer {
+    const loop = global_libhv_loop orelse return null;
+    const inner = hv.htimer_add(loop, callback, timeout_ms, repeat) orelse return null;
+    return .{ .inner = inner };
+}
+
+/// Remove a timer.
+pub fn removeTimer(timer: Timer) void {
+    hv.htimer_del(timer.inner);
+}
+
+/// Reset a timer with a new timeout. Pass 0 to reuse the original timeout.
+pub fn resetTimer(timer: Timer, timeout_ms: u32) void {
+    hv.htimer_reset(timer.inner, timeout_ms);
+}
+
+// ── WebSocket heartbeat ──────────────────────────────────────────────
+
+/// Sends a WebSocket ping frame via hio_write (used as hio_set_heartbeat callback).
+fn wsPingCallback(io: ?*hv.hio_t) callconv(.c) void {
+    const conn_io = io orelse return;
+    // WebSocket ping frame: FIN + opcode 0x9, payload length 0
+    const ping_frame = [_]u8{ 0x89, 0x00 };
+    _ = hv.hio_write(conn_io, &ping_frame, 2);
 }

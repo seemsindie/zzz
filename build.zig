@@ -54,7 +54,25 @@ pub fn build(b: *std.Build) void {
 
     // ── libhv C compilation (when backend=libhv) ────────────────────────
     if (std.mem.eql(u8, backend, "libhv")) {
-        const libhv_c_flags: []const []const u8 = if (target.result.os.tag == .macos)
+        const libhv_c_flags: []const []const u8 = if (tls_enabled)
+            (if (target.result.os.tag == .macos)
+                &.{
+                    "-DHV_WITHOUT_EVPP",
+                    "-DHV_WITHOUT_HTTP",
+                    "-DWITH_OPENSSL",
+                    "-DHAVE_EVENTFD=0",
+                    "-DHAVE_ENDIAN_H=0",
+                    "-DHAVE_PTHREAD_SPIN_LOCK=0",
+                    "-Wno-date-time",
+                }
+            else
+                &.{
+                    "-DHV_WITHOUT_EVPP",
+                    "-DHV_WITHOUT_HTTP",
+                    "-DWITH_OPENSSL",
+                    "-Wno-date-time",
+                })
+        else if (target.result.os.tag == .macos)
             &.{
                 "-DHV_WITHOUT_EVPP",
                 "-DHV_WITHOUT_HTTP",
@@ -72,6 +90,12 @@ pub fn build(b: *std.Build) void {
                 "-Wno-date-time",
             };
 
+        // SSL source: openssl.c when TLS enabled, nossl.c otherwise
+        const ssl_source: []const u8 = if (tls_enabled)
+            "vendor/libhv/ssl/openssl.c"
+        else
+            "vendor/libhv/ssl/nossl.c";
+
         mod.addCSourceFiles(.{
             .files = &.{
                 "vendor/libhv/base/hbase.c",
@@ -87,10 +111,16 @@ pub fn build(b: *std.Build) void {
                 "vendor/libhv/event/overlapio.c",
                 "vendor/libhv/event/unpack.c",
                 "vendor/libhv/ssl/hssl.c",
-                "vendor/libhv/ssl/nossl.c",
+                ssl_source,
             },
             .flags = libhv_c_flags,
         });
+
+        // Link OpenSSL for libhv C sources when TLS is enabled
+        if (tls_enabled) {
+            mod.addSystemIncludePath(.{ .cwd_relative = "/opt/homebrew/opt/openssl@3/include" });
+            mod.addLibraryPath(.{ .cwd_relative = "/opt/homebrew/opt/openssl@3/lib" });
+        }
 
         // Platform-specific event source
         if (target.result.os.tag == .linux) {
@@ -238,6 +268,61 @@ pub fn build(b: *std.Build) void {
             t.root_module.addImport("tls_options", tls_options.createModule());
             t.root_module.addImport("backend_options", backend_options.createModule());
             t.root_module.addImport("tls", tls_mod);
+
+            // When backend=libhv, add libhv include paths and C sources for test compilation
+            if (std.mem.eql(u8, backend, "libhv")) {
+                const test_libhv_c_flags: []const []const u8 = if (tls_enabled)
+                    (if (target.result.os.tag == .macos)
+                        &.{
+                            "-DHV_WITHOUT_EVPP", "-DHV_WITHOUT_HTTP", "-DWITH_OPENSSL",
+                            "-DHAVE_EVENTFD=0",  "-DHAVE_ENDIAN_H=0", "-DHAVE_PTHREAD_SPIN_LOCK=0",
+                            "-Wno-date-time",
+                        }
+                    else
+                        &.{ "-DHV_WITHOUT_EVPP", "-DHV_WITHOUT_HTTP", "-DWITH_OPENSSL", "-Wno-date-time" })
+                else if (target.result.os.tag == .macos)
+                    &.{
+                        "-DHV_WITHOUT_EVPP", "-DHV_WITHOUT_HTTP", "-DHV_WITHOUT_SSL",
+                        "-DHAVE_EVENTFD=0",  "-DHAVE_ENDIAN_H=0", "-DHAVE_PTHREAD_SPIN_LOCK=0",
+                        "-Wno-date-time",
+                    }
+                else
+                    &.{ "-DHV_WITHOUT_EVPP", "-DHV_WITHOUT_HTTP", "-DHV_WITHOUT_SSL", "-Wno-date-time" };
+
+                const test_ssl_source: []const u8 = if (tls_enabled) "vendor/libhv/ssl/openssl.c" else "vendor/libhv/ssl/nossl.c";
+
+                t.root_module.addCSourceFiles(.{
+                    .files = &.{
+                        "vendor/libhv/base/hbase.c",   "vendor/libhv/base/hsocket.c",
+                        "vendor/libhv/base/hlog.c",    "vendor/libhv/base/htime.c",
+                        "vendor/libhv/base/herr.c",    "vendor/libhv/base/rbtree.c",
+                        "vendor/libhv/event/hloop.c",  "vendor/libhv/event/hevent.c",
+                        "vendor/libhv/event/nio.c",    "vendor/libhv/event/nlog.c",
+                        "vendor/libhv/event/overlapio.c", "vendor/libhv/event/unpack.c",
+                        "vendor/libhv/ssl/hssl.c",     test_ssl_source,
+                    },
+                    .flags = test_libhv_c_flags,
+                });
+                if (target.result.os.tag == .linux) {
+                    t.root_module.addCSourceFiles(.{
+                        .files = &.{"vendor/libhv/event/epoll.c"},
+                        .flags = test_libhv_c_flags,
+                    });
+                } else if (target.result.os.tag == .macos) {
+                    t.root_module.addCSourceFiles(.{
+                        .files = &.{"vendor/libhv/event/kqueue.c"},
+                        .flags = test_libhv_c_flags,
+                    });
+                }
+                t.root_module.addIncludePath(b.path("vendor/libhv"));
+                t.root_module.addIncludePath(b.path("vendor/libhv/base"));
+                t.root_module.addIncludePath(b.path("vendor/libhv/event"));
+                t.root_module.addIncludePath(b.path("vendor/libhv/ssl"));
+                if (tls_enabled) {
+                    t.root_module.addSystemIncludePath(.{ .cwd_relative = "/opt/homebrew/opt/openssl@3/include" });
+                    t.root_module.addLibraryPath(.{ .cwd_relative = "/opt/homebrew/opt/openssl@3/lib" });
+                }
+            }
         }
 
         const run_t = b.addRunArtifact(t);
