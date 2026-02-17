@@ -357,13 +357,13 @@ fn handleAndRespond(conn_io: *hv.hio_t, state: *ConnState, req: *Request) void {
     if (resp.status == .switching_protocols) {
         if (resp.ws_handler) |ws_upgrade| {
             // Build and send the 101 handshake response
-            const upgrade_bytes = ws_handshake.buildUpgradeResponse(state.allocator, req) catch {
+            const upgrade_result = ws_handshake.buildUpgradeResponse(state.allocator, req) catch {
                 sendErrorResponse(conn_io, state, .internal_server_error);
                 return;
             };
-            defer state.allocator.free(upgrade_bytes);
+            defer state.allocator.free(upgrade_result.response_bytes);
 
-            _ = hv.hio_write(conn_io, upgrade_bytes.ptr, @intCast(upgrade_bytes.len));
+            _ = hv.hio_write(conn_io, upgrade_result.response_bytes.ptr, @intCast(upgrade_result.response_bytes.len));
 
             // Create a pipe for the WS bridge
             var pipe_fds: [2]std.posix.fd_t = undefined;
@@ -387,6 +387,7 @@ fn handleAndRespond(conn_io: *hv.hio_t, state: *ConnState, req: *Request) void {
             const ws_params_copy = ws_upgrade.params;
             const ws_query_copy = ws_upgrade.query;
             const ws_assigns_copy = ws_upgrade.assigns;
+            const ws_deflate = upgrade_result.deflate;
             const allocator = state.allocator;
             const read_fd = pipe_fds[0];
 
@@ -399,6 +400,7 @@ fn handleAndRespond(conn_io: *hv.hio_t, state: *ConnState, req: *Request) void {
                 ws_params_copy,
                 ws_query_copy,
                 ws_assigns_copy,
+                ws_deflate,
                 state,
             }) catch {
                 state.ws_mode = false;
@@ -450,6 +452,7 @@ fn wsThreadFn(
     ws_params: @import("../../middleware/context.zig").Params,
     ws_query: @import("../../middleware/context.zig").Params,
     ws_assigns: @import("../../middleware/context.zig").Assigns,
+    ws_deflate: bool,
     state: *ConnState,
 ) void {
     var pipe_reader: PipeReader = .{ .fd = read_fd };
@@ -463,6 +466,7 @@ fn wsThreadFn(
         ws_params,
         ws_query,
         ws_assigns,
+        ws_deflate,
     );
 
     // runLoop returned — WS connection is done

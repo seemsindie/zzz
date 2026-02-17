@@ -153,13 +153,13 @@ fn processRequest(
     if (resp.status == .switching_protocols) {
         if (resp.ws_handler) |ws_upgrade| {
             // Build and send the 101 handshake response
-            const upgrade_bytes = ws_handshake.buildUpgradeResponse(allocator, req) catch {
+            const upgrade_result = ws_handshake.buildUpgradeResponse(allocator, req) catch {
                 sendError(writer, .internal_server_error);
                 return false;
             };
-            defer allocator.free(upgrade_bytes);
+            defer allocator.free(upgrade_result.response_bytes);
 
-            writer.writeAll(upgrade_bytes) catch return false;
+            writer.writeAll(upgrade_result.response_bytes) catch return false;
             writer.flush() catch return false;
 
             // Enter the WebSocket frame loop (blocks until WS closes)
@@ -171,6 +171,7 @@ fn processRequest(
                 ws_upgrade.params,
                 ws_upgrade.query,
                 ws_upgrade.assigns,
+                upgrade_result.deflate,
             );
 
             // Free the WebSocketUpgrade allocated in wsHandler middleware

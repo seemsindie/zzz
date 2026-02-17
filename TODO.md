@@ -203,7 +203,7 @@ zig build run -- --some-arg
 - [x] Frame encoding (text, binary, ping, pong, close) (`frame.zig`)
 - [x] Frame decoding with masking/unmasking (`frame.zig`)
 - [x] Fragmented message reassembly (`src/core/websocket/connection.zig`)
-- [ ] Per-message compression (permessage-deflate)
+- [x] Per-message compression (permessage-deflate)
 - [x] Ping/pong heartbeat keepalive (`connection.zig` — auto-pong)
 - [x] Clean close handshake (`connection.zig`)
 - [x] WebSocket URL routing (`Router.ws()`, `src/middleware/websocket.zig`)
@@ -244,7 +244,7 @@ zig build run -- --some-arg
 - [x] In-process PubSub (single node)
 - [x] Subscribe/unsubscribe to topics
 - [x] Broadcast to topic
-- [ ] Direct message to specific subscriber
+- [x] Direct message to specific subscriber
 - [ ] Distributed PubSub (multi-node, future)
 
 ---

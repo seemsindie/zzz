@@ -92,6 +92,13 @@ pub const Socket = struct {
         PubSub.broadcast(topic, msg);
     }
 
+    /// Send a formatted channel message to a specific WebSocket subscriber of a topic.
+    pub fn pushTo(_: *Socket, topic: []const u8, event: []const u8, target: *WebSocket, payload_json: []const u8) void {
+        var buf: [4096]u8 = undefined;
+        const msg = formatMessage(&buf, topic, event, payload_json, null) orelse return;
+        PubSub.sendTo(topic, msg, target);
+    }
+
     /// Broadcast to all subscribers except this socket.
     pub fn broadcastFrom(self: *Socket, topic: []const u8, event: []const u8, payload_json: []const u8) void {
         var buf: [4096]u8 = undefined;
@@ -298,6 +305,34 @@ test "Socket push formats JSON correctly" {
     try testing.expect(std.mem.indexOf(u8, frame.payload, "\"event\":\"new_msg\"") != null);
     try testing.expect(std.mem.indexOf(u8, frame.payload, "\"payload\":{\"body\":\"hello\"}") != null);
     try testing.expect(std.mem.indexOf(u8, frame.payload, "\"ref\":null") != null);
+}
+
+test "Socket pushTo sends formatted JSON to specific target" {
+    PubSub.reset();
+    var w1: MockWriter = .{};
+    var w2: MockWriter = .{};
+    var ws1 = makeTestWs(&w1);
+    var ws2 = makeTestWs(&w2);
+    var sock: Socket = .{ .ws = &ws1, .active = true };
+
+    _ = PubSub.subscribe("room:lobby", &ws1);
+    _ = PubSub.subscribe("room:lobby", &ws2);
+
+    sock.pushTo("room:lobby", "whisper", &ws2, "{\"body\":\"secret\"}");
+
+    // ws1 should NOT have received
+    try testing.expectEqual(@as(usize, 0), w1.pos);
+    // ws2 should have received a formatted JSON message
+    try testing.expect(w2.pos > 0);
+
+    var reader: MockReader = .{ .data = w2.buf[0..w2.pos] };
+    const frame = try frame_mod.readFrame(testing.allocator, &reader);
+    defer testing.allocator.free(@constCast(frame.payload));
+
+    try testing.expectEqual(Opcode.text, frame.opcode);
+    try testing.expect(std.mem.indexOf(u8, frame.payload, "\"topic\":\"room:lobby\"") != null);
+    try testing.expect(std.mem.indexOf(u8, frame.payload, "\"event\":\"whisper\"") != null);
+    try testing.expect(std.mem.indexOf(u8, frame.payload, "\"payload\":{\"body\":\"secret\"}") != null);
 }
 
 test "Socket reply formats JSON with ref" {
